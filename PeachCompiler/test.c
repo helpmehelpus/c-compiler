@@ -10,4 +10,6 @@ ratolino
 '\t'
 't'
 
-0xAB98;
+0xAB98
+
+0b1110011
