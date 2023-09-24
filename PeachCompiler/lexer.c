@@ -13,6 +13,7 @@
     }
 
 struct token *read_next_token();
+bool lex_is_in_expression();
 
 static struct lex_process *lex_process;
 static struct token tmp_token;
@@ -23,6 +24,11 @@ static char peekc() {
 
 static char nextc() {
     char c = lex_process->function->next_char(lex_process);
+
+    if (lex_is_in_expression())
+    {
+        buffer_write(lex_process->parantheses_buffer, c);
+    }
     lex_process->pos.col += 1;
     if (c == '\n') {
         lex_process->pos.line += 1;
@@ -50,6 +56,10 @@ static struct pos lex_file_position() {
 struct token *token_create(struct token *_token) {
     memcpy(&tmp_token, _token, sizeof(struct token));
     tmp_token.pos = lex_file_position();
+    if (lex_is_in_expression())
+    {
+        tmp_token.between_brackets = buffer_ptr(lex_process->parantheses_buffer);
+    }
     return &tmp_token;
 }
 
@@ -167,6 +177,7 @@ const char *read_op() {
 }
 
 static void lex_new_expression() {
+    // Don't worry about memory management for now
     lex_process->current_expression_count++;
     if (lex_process->current_expression_count == 1) {
         lex_process->parantheses_buffer = buffer_create();
