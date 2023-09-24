@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include "compiler.h"
 #include "helpers/vector.h"
-
 struct compile_process *compile_process_create(const char *filename, const char *filename_out, int flags)
 {
     FILE *file = fopen(filename, "r");
@@ -15,7 +14,8 @@ struct compile_process *compile_process_create(const char *filename, const char 
     if (filename_out)
     {
         out_file = fopen(filename_out, "w");
-        if (!out_file) {
+        if (!out_file)
+        {
             return NULL;
         }
     }
@@ -37,9 +37,10 @@ char compile_process_next_char(struct lex_process* lex_process)
     char c = getc(compiler->cfile.fp);
     if (c == '\n')
     {
-        compiler->pos.line += 1;
+        compiler->pos.line +=1 ;
         compiler->pos.col = 1;
     }
+
     return c;
 }
 

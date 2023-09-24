@@ -1,5 +1,5 @@
-#ifndef PEACHCOMPILER_COMPILER_H
-#define PEACHCOMPILER_COMPILER_H
+#ifndef PEACHCOMPILER_H
+#define PEACHCOMPILER_H
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -8,12 +8,14 @@
 #define S_EQ(str, str2) \
         (str && str2 && (strcmp(str, str2) == 0))
 
+
 struct pos
 {
     int line;
     int col;
     const char* filename;
 };
+
 
 #define NUMERIC_CASE \
     case '0':       \
@@ -55,11 +57,10 @@ struct pos
     case '\\':      \
     case ')':       \
     case ']'
-
 enum
 {
     LEXICAL_ANALYSIS_ALL_OK,
-    LEXICAL_ANALYSIS_IMPUT_ERROR
+    LEXICAL_ANALYSIS_INPUT_ERROR
 };
 
 enum
@@ -74,6 +75,7 @@ enum
     TOKEN_TYPE_NEWLINE
 };
 
+
 enum
 {
     NUMBER_TYPE_NORMAL,
@@ -87,8 +89,6 @@ struct token
     int type;
     int flags;
     struct pos pos;
-
-    // Remember: unions in C share memory
     union
     {
         char cval;
@@ -103,22 +103,26 @@ struct token
     {
         int type;
     } num;
-    // True if there is whitespace between token and next
+
+    // True if their is whitespace between the token and the next token
+    // i.e * a for operator token * would mean whitespace would be set for token "a"
     bool whitespace;
 
+    // (5+10+20)
     const char* between_brackets;
+
 };
 
 struct lex_process;
 typedef char (*LEX_PROCESS_NEXT_CHAR)(struct lex_process* process);
-typedef char (*LEX_PROCES_PEEK_CHAR)(struct lex_process* process);
-typedef void (*LEX_PROCES_PUSH_CHAR)(struct lex_process* process, char c);
+typedef char (*LEX_PROCESS_PEEK_CHAR)(struct lex_process* process);
+typedef void (*LEX_PROCESS_PUSH_CHAR)(struct lex_process* process, char c);
 
 struct lex_process_functions
 {
     LEX_PROCESS_NEXT_CHAR next_char;
-    LEX_PROCES_PEEK_CHAR peek_char;
-    LEX_PROCES_PUSH_CHAR push_char;
+    LEX_PROCESS_PEEK_CHAR peek_char;
+    LEX_PROCESS_PUSH_CHAR push_char;
 };
 
 struct lex_process
@@ -128,13 +132,15 @@ struct lex_process
     struct compile_process* compiler;
 
     /**
-     * Tracks left parens
+     *
+     * ((50))
      */
     int current_expression_count;
-    struct buffer* parantheses_buffer;
+    struct buffer* parentheses_buffer;
     struct lex_process_functions* function;
 
-    // Private data that the lexer does not understand. Helps person using the lexer
+    // This will be private data that the lexer does not understand
+    // but the person using the lexer does understand.
     void* private;
 };
 
@@ -146,7 +152,7 @@ enum
 
 struct compile_process
 {
-    // Flags that define how file should be compiled
+    // The flags in regards to how this file should be compiled
     int flags;
 
     struct pos pos;
@@ -156,14 +162,16 @@ struct compile_process
         const char* abs_path;
     } cfile;
 
-    // Vector of tokens from lexical analysys
+
+    // A vector of tokens from lexical analysis.
     struct vector* token_vec;
 
     struct vector* node_vec;
     struct vector* node_tree_vec;
-
     FILE* ofile;
+
 };
+
 
 enum
 {
@@ -177,9 +185,10 @@ enum
     NODE_TYPE_EXPRESSION_PARENTHESES,
     NODE_TYPE_NUMBER,
     NODE_TYPE_IDENTIFIER,
+    NODE_TYPE_STRING,
     NODE_TYPE_VARIABLE,
     NODE_TYPE_VARIABLE_LIST,
-    NODE_TYPE_FUNTION,
+    NODE_TYPE_FUNCTION,
     NODE_TYPE_BODY,
     NODE_TYPE_STATEMENT_RETURN,
     NODE_TYPE_STATEMENT_IF,
@@ -195,7 +204,7 @@ enum
     NODE_TYPE_STATEMENT_GOTO,
 
     NODE_TYPE_UNARY,
-    NODE_TYPE_TERNARY,
+    NODE_TYPE_TENARY,
     NODE_TYPE_LABEL,
     NODE_TYPE_STRUCT,
     NODE_TYPE_UNION,
@@ -203,7 +212,6 @@ enum
     NODE_TYPE_CAST,
     NODE_TYPE_BLANK
 };
-
 struct node
 {
     int type;
@@ -213,10 +221,10 @@ struct node
 
     struct node_binded
     {
-        // Pointer to body node
+        // Pointer to our body node
         struct node* owner;
 
-        // Pointer to the function this node is in
+        // Pointer to the function this node is in.
         struct node* function;
     } binded;
 
@@ -228,36 +236,49 @@ struct node
         unsigned long lnum;
         unsigned long long llnum;
     };
+
 };
 
-// Main compiler headers
 int compile_file(const char* filename, const char* out_filename, int flags);
 struct compile_process *compile_process_create(const char *filename, const char *filename_out, int flags);
+
 
 char compile_process_next_char(struct lex_process* lex_process);
 char compile_process_peek_char(struct lex_process* lex_process);
 void compile_process_push_char(struct lex_process* lex_process, char c);
 
+
 void compiler_error(struct compile_process* compiler, const char* msg, ...);
 void compiler_warning(struct compile_process* compiler, const char* msg, ...);
 
-// Lexer headers
 struct lex_process* lex_process_create(struct compile_process* compiler, struct lex_process_functions* functions, void* private);
 void lex_process_free(struct lex_process* process);
 void* lex_process_private(struct lex_process* process);
 struct vector* lex_process_tokens(struct lex_process* process);
 int lex(struct lex_process* process);
+int parse(struct compile_process* process);
+
 /**
- * Builds tokens for an input string
+ * @brief Builds tokens for the input string.
+ *
  * @param compiler
  * @param str
- * @return
+ * @return struct lex_process*
  */
 struct lex_process* tokens_build_for_string(struct compile_process* compiler, const char* str);
 
-// Parser headers
-int parse(struct compile_process* process);
-
 bool token_is_keyword(struct token* token, const char* value);
+bool token_is_symbol(struct token* token, char c);
 
-#endif //PEACHCOMPILER_COMPILER_H
+bool token_is_nl_or_comment_or_newline_seperator(struct token *token);
+
+
+struct node* node_create(struct node* _node);
+struct node* node_pop();
+struct node* node_peek();
+struct node* node_peek_or_null();
+void node_push(struct node* node);
+void node_set_vector(struct vector* vec, struct vector* root_vec);
+
+
+#endif

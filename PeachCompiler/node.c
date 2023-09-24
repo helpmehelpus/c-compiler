@@ -2,7 +2,7 @@
 #include "helpers/vector.h"
 #include <assert.h>
 
-struct vector*  node_vector = NULL;
+struct vector* node_vector = NULL;
 struct vector* node_vector_root = NULL;
 
 void node_set_vector(struct vector* vec, struct vector* root_vec)
@@ -11,7 +11,7 @@ void node_set_vector(struct vector* vec, struct vector* root_vec)
     node_vector_root = root_vec;
 }
 
-void node_pudh(struct node* node)
+void node_push(struct node* node)
 {
     vector_push(node_vector, &node);
 }
@@ -33,11 +33,20 @@ struct node* node_pop()
 
     vector_pop(node_vector);
 
-    // No duplicates in root and last node
-    if(last_node == last_node_root)
+    if (last_node == last_node_root)
     {
         vector_pop(node_vector_root);
     }
 
     return last_node;
+
+}
+
+struct node* node_create(struct node* _node)
+{
+    struct node* node = malloc(sizeof(struct node));
+    memcpy(node, _node, sizeof(struct node));
+    #warning "We should set the binded owner and binded function here"
+    node_push(node);
+    return node;
 }
