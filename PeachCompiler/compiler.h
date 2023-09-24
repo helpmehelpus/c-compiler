@@ -143,6 +143,7 @@ enum
     COMPILER_FILE_COMPILED_OK,
     COMPILER_FAILED_WITH_ERRORS
 };
+
 struct compile_process
 {
     // Flags that define how file should be compiled
@@ -157,7 +158,76 @@ struct compile_process
 
     // Vector of tokens from lexical analysys
     struct vector* token_vec;
+
+    struct vector* node_vec;
+    struct vector* node_tree_vec;
+
     FILE* ofile;
+};
+
+enum
+{
+    PARSE_ALL_OK,
+    PARSE_GENERAL_ERROR
+};
+
+enum
+{
+    NODE_TYPE_EXPRESSION,
+    NODE_TYPE_EXPRESSION_PARENTHESES,
+    NODE_TYPE_NUMBER,
+    NODE_TYPE_IDENTIFIER,
+    NODE_TYPE_VARIABLE,
+    NODE_TYPE_VARIABLE_LIST,
+    NODE_TYPE_FUNTION,
+    NODE_TYPE_BODY,
+    NODE_TYPE_STATEMENT_RETURN,
+    NODE_TYPE_STATEMENT_IF,
+    NODE_TYPE_STATEMENT_ELSE,
+    NODE_TYPE_STATEMENT_WHILE,
+    NODE_TYPE_STATEMENT_DO_WHILE,
+    NODE_TYPE_STATEMENT_FOR,
+    NODE_TYPE_STATEMENT_BREAK,
+    NODE_TYPE_STATEMENT_CONTINUE,
+    NODE_TYPE_STATEMENT_SWITCH,
+    NODE_TYPE_STATEMENT_CASE,
+    NODE_TYPE_STATEMENT_DEFAULT,
+    NODE_TYPE_STATEMENT_GOTO,
+
+    NODE_TYPE_UNARY,
+    NODE_TYPE_TERNARY,
+    NODE_TYPE_LABEL,
+    NODE_TYPE_STRUCT,
+    NODE_TYPE_UNION,
+    NODE_TYPE_BRACKET,
+    NODE_TYPE_CAST,
+    NODE_TYPE_BLANK
+};
+
+struct node
+{
+    int type;
+    int flags;
+
+    struct pos pos;
+
+    struct node_binded
+    {
+        // Pointer to body node
+        struct node* owner;
+
+        // Pointer to the function this node is in
+        struct node* function;
+    } binded;
+
+    union
+    {
+        char cval;
+        const char* sval;
+        unsigned int inum;
+        unsigned long lnum;
+        unsigned long long llnum;
+    };
 };
 
 // Main compiler headers
@@ -184,6 +254,9 @@ int lex(struct lex_process* process);
  * @return
  */
 struct lex_process* tokens_build_for_string(struct compile_process* compiler, const char* str);
+
+// Parser headers
+int parse(struct compile_process* process);
 
 bool token_is_keyword(struct token* token, const char* value);
 

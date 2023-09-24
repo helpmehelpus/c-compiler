@@ -49,7 +49,14 @@ int compile_file(const char* filename, const char* out_filename, int flags)
 
     // Save token vec for parsing
     process->token_vec = lex_process->token_vec;
+
     // Parsing
+    if (parse(process) != PARSE_ALL_OK)
+    {
+        return COMPILER_FAILED_WITH_ERRORS;
+    }
+
     // Codegen
+
     return COMPILER_FILE_COMPILED_OK;
 }
