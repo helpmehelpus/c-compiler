@@ -74,6 +74,14 @@ enum
     TOKEN_TYPE_NEWLINE
 };
 
+enum
+{
+    NUMBER_TYPE_NORMAL,
+    NUMBER_TYPE_LONG,
+    NUMBER_TYPE_FLOAT,
+    NUMBER_TYPE_DOUBLE
+};
+
 struct token
 {
     int type;
@@ -91,6 +99,10 @@ struct token
         void* any;
     };
 
+    struct token_number
+    {
+        int type;
+    } num;
     // True if there is whitespace between token and next
     bool whitespace;
 
@@ -143,6 +155,8 @@ struct compile_process
         const char* abs_path;
     } cfile;
 
+    // Vector of tokens from lexical analysys
+    struct vector* token_vec;
     FILE* ofile;
 };
 
@@ -160,9 +174,16 @@ void compiler_warning(struct compile_process* compiler, const char* msg, ...);
 // Lexer headers
 struct lex_process* lex_process_create(struct compile_process* compiler, struct lex_process_functions* functions, void* private);
 void lex_process_free(struct lex_process* process);
-void* lex_proces_private(struct lex_process* process);
+void* lex_process_private(struct lex_process* process);
 struct vector* lex_process_tokens(struct lex_process* process);
 int lex(struct lex_process* process);
+/**
+ * Builds tokens for an input string
+ * @param compiler
+ * @param str
+ * @return
+ */
+struct lex_process* tokens_build_for_string(struct compile_process* compiler, const char* str);
 
 bool token_is_keyword(struct token* token, const char* value);
 

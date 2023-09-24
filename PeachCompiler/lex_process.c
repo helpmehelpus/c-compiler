@@ -21,7 +21,7 @@ void lex_process_free(struct lex_process* process)
     free(process);
 }
 
-void* lex_proces_private(struct lex_process* process)
+void* lex_process_private(struct lex_process* process)
 {
     return process->private;
 }
