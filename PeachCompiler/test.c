@@ -6,3 +6,6 @@ ratolino
 /**
 * ratolote
 */
+
+'\t'
+'t'
