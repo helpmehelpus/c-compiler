@@ -6,7 +6,7 @@ int main()
     int res = compile_file("./test.c", "./test", 0);
     if (res == COMPILER_FILE_COMPILED_OK)
     {
-        printf("everything compiled file\n");
+        printf("Compilation successful\n");
     }
     else if(res == COMPILER_FAILED_WITH_ERRORS)
     {
