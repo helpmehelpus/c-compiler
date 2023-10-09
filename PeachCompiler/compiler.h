@@ -143,6 +143,22 @@ enum {
     COMPILER_FAILED_WITH_ERRORS
 };
 
+struct scope
+{
+    int flags;
+
+    // void pointers. allows some abstraction; we can push anything to our scope
+    // whoever pops need to know what the type is to they can cast it back
+    struct vector* entities;
+
+    // total number of bytes used by the scope. 16-byte aligned
+    // in C we are required to align stack frames to 16 bytes each
+    size_t size;
+
+    // NULL if there is no parent
+    struct scope* parent;
+};
+
 struct compile_process {
     // The flags in regards to how this file should be compiled
     int flags;
@@ -161,6 +177,10 @@ struct compile_process {
     struct vector *node_tree_vec;
     FILE *ofile;
 
+    struct {
+        struct scope* root;
+        struct scope* current;
+    } scope;
 };
 
 
