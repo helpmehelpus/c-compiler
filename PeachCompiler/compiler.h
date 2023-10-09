@@ -159,6 +159,21 @@ struct scope
     struct scope* parent;
 };
 
+enum
+{
+    SYMBOL_TYPE_NODE,
+    SYMBOL_TYPE_NATIVE_FUNCTION, // macro function that exists only in the binary
+    SYMBOL_TYPE_UNKNOWN
+};
+
+struct symbol
+{
+    // names need to be unique
+    const char* name;
+    int type;
+    void* data;
+};
+
 struct compile_process {
     // The flags in regards to how this file should be compiled
     int flags;
@@ -181,6 +196,13 @@ struct compile_process {
         struct scope* root;
         struct scope* current;
     } scope;
+
+    struct {
+        // current active symbol table. holds (struct symbol*) objects
+        struct vector* table;
+        // all symbol tables. holds (struct vector*), so we can save multiple symbol tables
+        struct vector* tables;
+    } symbols;
 };
 
 
