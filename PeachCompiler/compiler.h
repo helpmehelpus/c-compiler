@@ -9,11 +9,10 @@
         (str && str2 && (strcmp(str, str2) == 0))
 
 
-struct pos
-{
+struct pos {
     int line;
     int col;
-    const char* filename;
+    const char *filename;
 };
 
 
@@ -57,14 +56,12 @@ struct pos
     case '\\':      \
     case ')':       \
     case ']'
-enum
-{
+enum {
     LEXICAL_ANALYSIS_ALL_OK,
     LEXICAL_ANALYSIS_INPUT_ERROR
 };
 
-enum
-{
+enum {
     TOKEN_TYPE_IDENTIFIER,
     TOKEN_TYPE_KEYWORD,
     TOKEN_TYPE_OPERATOR,
@@ -76,31 +73,27 @@ enum
 };
 
 
-enum
-{
+enum {
     NUMBER_TYPE_NORMAL,
     NUMBER_TYPE_LONG,
     NUMBER_TYPE_FLOAT,
     NUMBER_TYPE_DOUBLE
 };
 
-struct token
-{
+struct token {
     int type;
     int flags;
     struct pos pos;
-    union
-    {
+    union {
         char cval;
-        const char* sval;
+        const char *sval;
         unsigned int inum;
         unsigned long lnum;
         unsigned long long llnum;
-        void* any;
+        void *any;
     };
 
-    struct token_number
-    {
+    struct token_number {
         int type;
     } num;
 
@@ -109,78 +102,74 @@ struct token
     bool whitespace;
 
     // (5+10+20)
-    const char* between_brackets;
+    const char *between_brackets;
 
 };
 
 struct lex_process;
-typedef char (*LEX_PROCESS_NEXT_CHAR)(struct lex_process* process);
-typedef char (*LEX_PROCESS_PEEK_CHAR)(struct lex_process* process);
-typedef void (*LEX_PROCESS_PUSH_CHAR)(struct lex_process* process, char c);
 
-struct lex_process_functions
-{
+typedef char (*LEX_PROCESS_NEXT_CHAR)(struct lex_process *process);
+
+typedef char (*LEX_PROCESS_PEEK_CHAR)(struct lex_process *process);
+
+typedef void (*LEX_PROCESS_PUSH_CHAR)(struct lex_process *process, char c);
+
+struct lex_process_functions {
     LEX_PROCESS_NEXT_CHAR next_char;
     LEX_PROCESS_PEEK_CHAR peek_char;
     LEX_PROCESS_PUSH_CHAR push_char;
 };
 
-struct lex_process
-{
+struct lex_process {
     struct pos pos;
-    struct vector* token_vec;
-    struct compile_process* compiler;
+    struct vector *token_vec;
+    struct compile_process *compiler;
 
     /**
      *
      * ((50))
      */
     int current_expression_count;
-    struct buffer* parentheses_buffer;
-    struct lex_process_functions* function;
+    struct buffer *parentheses_buffer;
+    struct lex_process_functions *function;
 
     // This will be private data that the lexer does not understand
     // but the person using the lexer does understand.
-    void* private;
+    void *private;
 };
 
-enum
-{
+enum {
     COMPILER_FILE_COMPILED_OK,
     COMPILER_FAILED_WITH_ERRORS
 };
 
-struct compile_process
-{
+struct compile_process {
     // The flags in regards to how this file should be compiled
     int flags;
 
     struct pos pos;
-    struct compile_process_input_file
-    {
-        FILE* fp;
-        const char* abs_path;
+    struct compile_process_input_file {
+        FILE *fp;
+        const char *abs_path;
     } cfile;
 
 
     // A vector of tokens from lexical analysis.
-    struct vector* token_vec;
+    struct vector *token_vec;
 
-    struct vector* node_vec;
-    struct vector* node_tree_vec;
-    FILE* ofile;
+    struct vector *node_vec;
+    struct vector *node_tree_vec;
+    FILE *ofile;
 
 };
 
 
-enum
-{
+enum {
     PARSE_ALL_OK,
     PARSE_GENERAL_ERROR
 };
 
-enum
-{
+enum {
     NODE_TYPE_EXPRESSION,
     NODE_TYPE_EXPRESSION_PARENTHESES,
     NODE_TYPE_NUMBER,
@@ -213,41 +202,35 @@ enum
     NODE_TYPE_BLANK
 };
 
-enum
-{
+enum {
     NODE_FLAG_INSIDE_EXPRESSION = 0b00000001
 };
 
-struct node
-{
+struct node {
     int type;
     int flags;
 
     struct pos pos;
 
-    struct node_binded
-    {
+    struct node_binded {
         // Pointer to our body node
-        struct node* owner;
+        struct node *owner;
 
         // Pointer to the function this node is in.
-        struct node* function;
+        struct node *function;
     } binded;
 
-    union
-    {
-        struct exp
-        {
-            struct node* left;
-            struct node* right;
-            const char* op;
+    union {
+        struct exp {
+            struct node *left;
+            struct node *right;
+            const char *op;
         } exp;
     };
 
-    union
-    {
+    union {
         char cval;
-        const char* sval;
+        const char *sval;
         unsigned int inum;
         unsigned long lnum;
         unsigned long long llnum;
@@ -255,24 +238,94 @@ struct node
 
 };
 
-int compile_file(const char* filename, const char* out_filename, int flags);
+enum {
+    DATATYPE_FLAG_IS_SIGNED = 0b00000001,
+    DATATYPE_FLAG_IS_STATIC = 0b00000010,
+    DATATYPE_FLAG_IS_CONST = 0b00000100,
+    DATATYPE_FLAG_IS_POINTER = 0b00001000,
+    DATATYPE_FLAG_IS_ARRAY = 0b00010000,
+    DATATYPE_FLAG_IS_EXTERN = 0b00100000,
+    DATATYPE_FLAG_IS_RESTRICT = 0b01000000,
+    DATATYPE_FLAG_IGNORE_TYPE_CHECKING = 0b10000000,
+    DATATYPE_FLAG_IS_SECONDARY = 0b100000000,
+    DATATYPE_FLAG_STRUCT_UNION_NO_NAME = 0b1000000000,
+    DATATYPE_FLAG_IS_LITERAL = 0b10000000000,
+};
+enum {
+    DATA_TYPE_VOID,
+    DATA_TYPE_CHAR,
+    DATA_TYPE_SHORT,
+    DATA_TYPE_INTEGER,
+    DATA_TYPE_LONG,
+    DATA_TYPE_FLOAT,
+    DATA_TYPE_DOUBLE,
+    DATA_TYPE_STRUCT,
+    DATA_TYPE_UNION,
+    DATA_TYPE_UNKNOWN
+};
+
+struct datatype {
+    int flags;
+    // i.e type of long, int, float ect..
+    int type;
+
+    // i.e long int. int being the secondary.
+    struct datatype *secondary;
+    // long
+    const char *type_str;
+    // The sizeof the datatype.
+    size_t size;
+    int pointer_depth;
+
+    union {
+        struct node *struct_node;
+        struct node *union_node;
+    };
+
+};
+
+enum {
+    DATA_TYPE_EXPECT_PRIMITIVE,
+    DATA_TYPE_EXPECT_UNION,
+    DATA_TYPE_EXPECT_STRUCT
+};
+
+enum {
+    DATA_SIZE_ZERO = 0,
+    DATA_SIZE_BYTE = 1,
+    DATA_SIZE_WORD = 2,
+    DATA_SIZE_DWORD = 4,
+    DATA_SIZE_DDWORD = 8
+};
+
+int compile_file(const char *filename, const char *out_filename, int flags);
+
 struct compile_process *compile_process_create(const char *filename, const char *filename_out, int flags);
 
 
-char compile_process_next_char(struct lex_process* lex_process);
-char compile_process_peek_char(struct lex_process* lex_process);
-void compile_process_push_char(struct lex_process* lex_process, char c);
+char compile_process_next_char(struct lex_process *lex_process);
+
+char compile_process_peek_char(struct lex_process *lex_process);
+
+void compile_process_push_char(struct lex_process *lex_process, char c);
 
 
-void compiler_error(struct compile_process* compiler, const char* msg, ...);
-void compiler_warning(struct compile_process* compiler, const char* msg, ...);
+void compiler_error(struct compile_process *compiler, const char *msg, ...);
 
-struct lex_process* lex_process_create(struct compile_process* compiler, struct lex_process_functions* functions, void* private);
-void lex_process_free(struct lex_process* process);
-void* lex_process_private(struct lex_process* process);
-struct vector* lex_process_tokens(struct lex_process* process);
-int lex(struct lex_process* process);
-int parse(struct compile_process* process);
+void compiler_warning(struct compile_process *compiler, const char *msg, ...);
+
+struct lex_process *
+lex_process_create(struct compile_process *compiler, struct lex_process_functions *functions, void *private);
+
+void lex_process_free(struct lex_process *process);
+
+void *lex_process_private(struct lex_process *process);
+
+struct vector *lex_process_tokens(struct lex_process *process);
+
+int lex(struct lex_process *process);
+
+int parse(struct compile_process *process);
 
 /**
  * @brief Builds tokens for the input string.
@@ -281,39 +334,53 @@ int parse(struct compile_process* process);
  * @param str
  * @return struct lex_process*
  */
-struct lex_process* tokens_build_for_string(struct compile_process* compiler, const char* str);
+struct lex_process *tokens_build_for_string(struct compile_process *compiler, const char *str);
 
-bool token_is_keyword(struct token* token, const char* value);
-bool token_is_symbol(struct token* token, char c);
+bool token_is_keyword(struct token *token, const char *value);
+
+bool token_is_symbol(struct token *token, char c);
 
 bool token_is_nl_or_comment_or_newline_seperator(struct token *token);
 
+bool keyword_is_datatype(const char *str);
 
-struct node* node_create(struct node* _node);
-void make_exp_node(struct node* left_node, struct node* right_node, const char* op);
+bool token_is_primitive_keyword(struct token *token);
 
-struct node* node_pop();
-struct node* node_peek();
-struct node* node_peek_or_null();
-void node_push(struct node* node);
-void node_set_vector(struct vector* vec, struct vector* root_vec);
+bool datatype_is_struct_or_union_for_name(const char *name);
 
-bool node_is_expressionable(struct node* node);
-struct node* node_peek_expressionable_or_null();
+bool token_is_operator(struct token *token, const char *val);
+
+struct node *node_create(struct node *_node);
+
+void make_exp_node(struct node *left_node, struct node *right_node, const char *op);
+
+struct node *node_pop();
+
+struct node *node_peek();
+
+struct node *node_peek_or_null();
+
+void node_push(struct node *node);
+
+void node_set_vector(struct vector *vec, struct vector *root_vec);
+
+bool node_is_expressionable(struct node *node);
+
+struct node *node_peek_expressionable_or_null();
+
 
 #define TOTAL_OPERATOR_GROUPS 14
 #define MAX_OPERATORS_IN_GROUP 12
 
-enum
-{
+enum {
     ASSOCIATIVITY_LEFT_TO_RIGHT,
     ASSOCIATIVITY_RIGHT_TO_LEFT
 };
 
-struct expressionable_op_precedence_group
-{
-    char* operators[MAX_OPERATORS_IN_GROUP];
-    int associativity;
+struct expressionable_op_precedence_group {
+    char *operators[MAX_OPERATORS_IN_GROUP];
+    int associtivity;
 };
+
 
 #endif
