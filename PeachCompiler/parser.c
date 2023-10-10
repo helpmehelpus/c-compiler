@@ -406,9 +406,38 @@ void parse_datatype(struct datatype *dtype) {
     parse_datatype_modifiers(dtype);
 }
 
+bool parser_is_int_valid_ater_datatype(struct datatype* dtype)
+{
+    return dtype->type == DATA_TYPE_LONG || dtype->type == DATA_TYPE_FLOAT || dtype->type == DATA_TYPE_DOUBLE;
+}
+
+/**
+ * long int abc; we want to ignore the "int", as long int and long have the same size
+ * @param dtype
+ */
+void parser_ignore_int(struct datatype* dtype)
+{
+    if (!token_is_keyword(token_peek_next(), "int"))
+    {
+        //no int to ignore
+        return;
+    }
+
+    if (!parser_is_int_valid_ater_datatype(dtype))
+    {
+        compiler_error(current_process, "Invalid secondary \"int\" type that is not allowed\n");
+    }
+
+    // if the token is valid, ignore it and move on
+    token_next();
+}
+
 void parse_variable_function_or_struct_union(struct history *history) {
     struct datatype dtype;
     parse_datatype(&dtype);
+
+    // Ignore int abbreviations if necessary. long int -> long
+    parser_ignore_int(&dtype);
 }
 
 void parse_keyword(struct history *history) {
