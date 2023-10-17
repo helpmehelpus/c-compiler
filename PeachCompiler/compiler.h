@@ -309,6 +309,7 @@ struct node {
         struct var
         {
             struct datatype type;
+            int padding;
             const char* name;
             struct node* val;
         } var;
@@ -324,6 +325,37 @@ struct node {
             // int x[50], [50] would be the bracket node. inner would be NODE_TYPE_NUMBER with value of 50
             struct node* inner;
         } bracket;
+
+        struct _struct
+        {
+            const char* name;
+            struct node* body_n;
+
+            /**
+             * struct abc
+             * {
+             *
+             * } var_name; <--- var, NULL if no variable attached
+             */
+            struct node* var;
+        } _struct;
+
+        struct body
+        {
+            /**
+             * struct node* vector of statements
+             */
+            struct vector* statements;
+
+            // Sum of sizes of all variable declaration statements
+            size_t size;
+
+            // In case we need to pad for alignment
+            bool padded;
+
+            // Pointer to largest variable node.
+            struct node* largest_var_node;
+        } body;
     };
 
     union {
@@ -433,6 +465,7 @@ struct node *node_create(struct node *_node);
 void make_exp_node(struct node *left_node, struct node *right_node, const char *op);
 
 void make_bracket_node(struct node* node);
+void make_body_node(struct vector* body_vec, size_t size, bool padded, struct node* largest_var_node);
 
 struct node *node_pop();
 
@@ -455,6 +488,44 @@ struct vector* array_brackets_node_vector(struct array_brackets* brackets);
 size_t array_brackets_calculate_size_from_index(struct datatype* dtype, struct array_brackets* brackets, int index);
 size_t array_brackets_calculate_size(struct datatype* dtype, struct array_brackets* brackets);
 int array_total_indexes(struct datatype* dtype);
+bool datatype_is_struct_or_union(struct datatype* dtype);
+
+/**
+ * Gets the variable size from the given node
+ * @param var_node
+ * @return
+ */
+size_t variable_size(struct node* var_node);
+/**
+ * sums variable size of all variables node inside the list of nodes
+ * @param var_list_node
+ * @return
+ */
+size_t variable_size_for_list(struct node* var_list_node);
+
+int padding(int val, int to);
+int align_value(int val, int to);
+int aling_value_treat_positive(int val, int to);
+int compute_sum_padding(struct vector* vec);
+
+size_t datatype_size(struct datatype* dtype);
+size_t datatype_size_no_ptr(struct datatype* dtype);
+size_t datatype_element_size(struct datatype* dtype);
+size_t datatype_size_for_array_access(struct datatype* dtype);
+
+struct scope* scope_new(struct compile_process* process, int flags);
+struct scope* scope_create_root(struct compile_process* process);
+void scope_free_root(struct compile_process* process);
+void scope_iteration_start(struct scope* scope);
+void scope_iteration_end(struct scope* scope);
+void* scope_iterate_back(struct scope* scope);
+void* scope_last_entity_at_scope(struct scope* scope);
+void* scope_last_entity_from_scope_stop_at(struct scope* scope, struct scope* stop_scope);
+void* scope_last_entity_stop_at(struct compile_process* process, struct scope* stop_scope);
+void* scope_last_entity(struct compile_process* process);
+void scope_push(struct compile_process* process, void* ptr, size_t elem_size);
+void scope_finish(struct compile_process* process);
+struct scope* scope_current(struct compile_process* process);
 
 #define TOTAL_OPERATOR_GROUPS 14
 #define MAX_OPERATORS_IN_GROUP 12
