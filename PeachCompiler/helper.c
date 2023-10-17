@@ -23,6 +23,23 @@ size_t variable_size_for_list(struct node* var_list_node)
     return size;
 }
 
+struct node* variable_struct_or_union_body_node(struct node* node)
+{
+    if (!node_is_struct_or_union_variable(node))
+    {
+        return NULL;
+    }
+    if (node->var.type.type == DATA_TYPE_STRUCT)
+    {
+        return node->var.type.struct_node->_struct.body_n;
+    }
+
+    #warning Need to implement unions
+    // Need to return the union body here. We have no compiler process here to warn or error
+    printf("NO UNION NODES ARE YET IMPLEMENTED n");
+    exit(1);
+}
+
 /**
  * Pad to get 4-byte alignment
  * @param val

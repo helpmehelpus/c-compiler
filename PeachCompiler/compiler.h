@@ -480,6 +480,7 @@ void node_set_vector(struct vector *vec, struct vector *root_vec);
 bool node_is_expressionable(struct node *node);
 
 struct node *node_peek_expressionable_or_null();
+bool node_is_struct_or_union_variable(struct node* node);
 
 struct array_brackets* array_brackets_new();
 void array_brackets_free(struct array_brackets* brackets);
@@ -489,6 +490,7 @@ size_t array_brackets_calculate_size_from_index(struct datatype* dtype, struct a
 size_t array_brackets_calculate_size(struct datatype* dtype, struct array_brackets* brackets);
 int array_total_indexes(struct datatype* dtype);
 bool datatype_is_struct_or_union(struct datatype* dtype);
+struct node* variable_struct_or_union_body_node(struct node* node);
 
 /**
  * Gets the variable size from the given node
