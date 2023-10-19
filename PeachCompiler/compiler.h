@@ -543,8 +543,9 @@ struct scope* scope_current(struct compile_process* process);
 
 void symresolver_build_for_node(struct compile_process* process, struct node* node);
 struct symbol* symresolver_get_symbol(struct compile_process* process, const char* name);
-
-
+void symresolver_initialise(struct compile_process* process);
+void symresolver_new_table(struct compile_process* process);
+void symresolver_end_table(struct compile_process* process);
 
 #define TOTAL_OPERATOR_GROUPS 14
 #define MAX_OPERATORS_IN_GROUP 12
