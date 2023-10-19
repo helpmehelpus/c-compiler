@@ -1,6 +1,6 @@
 #include "compiler.h"
 #include "helpers/vector.h"
-#include "assert.h"
+#include <assert.h>
 
 struct array_brackets* array_brackets_new()
 {
@@ -31,7 +31,8 @@ size_t array_brackets_calculate_size_from_index(struct datatype* dtype, struct a
     size_t size = dtype->size;
     if (index >= vector_count(array_vec))
     {
-        // In case we have a char* text, which we can index with text[0], ...
+        // char* abc;
+        // return abc[0]; return abc[1];
         return size;
     }
 
@@ -42,7 +43,7 @@ size_t array_brackets_calculate_size_from_index(struct datatype* dtype, struct a
         return 0;
     }
 
-    while (array_bracket_node)
+    while(array_bracket_node)
     {
         assert(array_bracket_node->bracket.inner->type == NODE_TYPE_NUMBER);
         int number = array_bracket_node->bracket.inner->llnum;

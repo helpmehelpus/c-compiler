@@ -4,26 +4,20 @@
 #include <stdlib.h>
 #include <assert.h>
 
-
-// stack-like abstraction for scopes
-
 struct scope* scope_alloc()
 {
     struct scope* scope = calloc(1, sizeof(struct scope));
     scope->entities = vector_create(sizeof(void*));
-    // peek pointer allows us to, well... peek ahead. without popping
     vector_set_peek_pointer_end(scope->entities);
     vector_set_flag(scope->entities, VECTOR_FLAG_PEEK_DECREMENT);
     return scope;
 }
 
-// Again, not concerned with freeing memory for this project
 void scope_dealloc(struct scope* scope)
 {
-
+    // Do nothing for now.
 }
 
-// global scope
 struct scope* scope_create_root(struct compile_process* process)
 {
     assert(!process->scope.root);
@@ -49,7 +43,6 @@ struct scope* scope_new(struct compile_process* process, int flags)
 
     struct scope* new_scope = scope_alloc();
     new_scope->flags = flags;
-    // creates new scope at the bottom
     new_scope->parent = process->scope.current;
     process->scope.current = new_scope;
     return new_scope;
@@ -57,12 +50,13 @@ struct scope* scope_new(struct compile_process* process, int flags)
 
 void scope_iteration_start(struct scope* scope)
 {
-    // reset iterations to backtrack
     vector_set_peek_pointer(scope->entities, 0);
     if (scope->entities->flags & VECTOR_FLAG_PEEK_DECREMENT)
     {
         vector_set_peek_pointer_end(scope->entities);
     }
+
+
 }
 
 void scope_iteration_end(struct scope* scope)
@@ -86,14 +80,14 @@ void* scope_last_entity_at_scope(struct scope* scope)
     return vector_back_ptr(scope->entities);
 }
 
-// recursively checks all scopes until it reaches stop_scope
 void* scope_last_entity_from_scope_stop_at(struct scope* scope, struct scope* stop_scope)
 {
     if (scope == stop_scope)
+    {
         return NULL;
+    }
 
     void* last = scope_last_entity_at_scope(scope);
-
     if (last)
     {
         return last;
@@ -108,13 +102,11 @@ void* scope_last_entity_from_scope_stop_at(struct scope* scope, struct scope* st
     return NULL;
 }
 
-// Allows the process, and not the caller, to be aware of the scope
 void* scope_last_entity_stop_at(struct compile_process* process, struct scope* stop_scope)
 {
     return scope_last_entity_from_scope_stop_at(process->scope.current, stop_scope);
 }
 
-// Get last entity of current scope; backtrack until it finds a NULL
 void* scope_last_entity(struct compile_process* process)
 {
     return scope_last_entity_stop_at(process, NULL);
@@ -123,7 +115,6 @@ void* scope_last_entity(struct compile_process* process)
 void scope_push(struct compile_process* process, void* ptr, size_t elem_size)
 {
     vector_push(process->scope.current->entities, &ptr);
-    // we calculate size for every element we push
     process->scope.current->size += elem_size;
 }
 
@@ -132,7 +123,6 @@ void scope_finish(struct compile_process* process)
     struct scope* new_current_scope = process->scope.current->parent;
     scope_dealloc(process->scope.current);
     process->scope.current = new_current_scope;
-
     if (process->scope.root && !process->scope.current)
     {
         process->scope.root = NULL;
