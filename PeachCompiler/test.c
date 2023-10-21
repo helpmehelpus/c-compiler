@@ -8,4 +8,6 @@ int main(int x)
     } else {
         int d = 44;
     }
+
+    return;
 }
