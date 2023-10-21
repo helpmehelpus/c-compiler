@@ -386,6 +386,29 @@ struct node
             // A pointer to the largest variable node in the statements vector.
             struct node* largest_var_node;
         } body;
+
+        struct function
+        {
+            int flags;
+            struct datatype rtype;
+
+            const char* name;
+
+            struct function_arguments
+            {
+                // Must be type NODE_TYPE_VARIABLE
+                struct vector* vector;
+
+                // How much to add to EBP to find first argument
+                size_t stack_addition;
+            } args;
+
+            // NULL if this is a function prototype
+            struct node* body_n;
+
+            // Stack size for all variables inside the function
+            size_t stack_size;
+        } func;
     };
 
     union
@@ -443,6 +466,11 @@ enum
     DATA_SIZE_DDWORD = 8
 };
 
+enum
+{
+    FUNCTION_NODE_FLAG_IS_NATIVE = 0b00000001,
+};
+
 int compile_file(const char* filename, const char* out_filename, int flags);
 struct compile_process *compile_process_create(const char *filename, const char *filename_out, int flags);
 
@@ -497,6 +525,7 @@ void make_exp_node(struct node* left_node, struct node* right_node, const char* 
 void make_bracket_node(struct node* node);
 void make_body_node(struct vector* body_vec, size_t size, bool padded, struct node* largest_var_node);
 void make_struct_node(const char* name, struct node* body_node);
+void make_function_node(struct datatype* ret_type, const char* name, struct vector* arguments, struct node* body_node);
 
 struct node* node_pop();
 struct node* node_peek();
@@ -564,6 +593,7 @@ void symresolver_new_table(struct compile_process* process);
 void symresolver_end_table(struct compile_process* process);
 void symresolver_build_for_node(struct compile_process* process, struct node* node);
 struct symbol* symresolver_get_symbol(struct compile_process* process, const char* name);
+struct symbol* symresolver_get_symbol_for_native_function(struct compile_process* process, const char* name);
 
 #define TOTAL_OPERATOR_GROUPS 14
 #define MAX_OPERATORS_IN_GROUP 12
