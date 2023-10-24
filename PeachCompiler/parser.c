@@ -901,6 +901,17 @@ void parse_function(struct datatype* ret_type, struct token* name_token, struct 
 
 }
 
+void parse_label(struct history* history)
+{
+    expect_sym(':');
+    struct node* label_name_node = node_pop();
+    if (label_name_node->type != NODE_TYPE_IDENTIFIER)
+    {
+        compiler_error(current_process, "Expected identifier for label, but something else was provided\n");
+    }
+    make_label_node(label_name_node);
+}
+
 void parse_symbol()
 {
     if (token_next_is_symbol('{'))
@@ -912,6 +923,13 @@ void parse_symbol()
 
         node_push(body_node);
     }
+    else if (token_next_is_symbol(':'))
+    {
+        parse_label(history_begin(0));
+        return;
+    }
+
+    compiler_error(current_process, "Invalid symbol\n");
 }
 
 void parse_statement(struct history *history)
