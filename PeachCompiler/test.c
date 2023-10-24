@@ -7,4 +7,6 @@ int main(int x)
 
     ratolino:
 
+    goto ratolino;
+
 }
