@@ -5,8 +5,11 @@ int main(int x)
         continue;
     }
 
-    ratolino:
 
-    goto ratolino;
+    switch (x)
+    {
+        case 1:
+            break;
+    }
 
 }
