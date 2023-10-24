@@ -1,5 +1,5 @@
 int main(int x)
 {
-    x = 50, 30;
+    x = (int) 56;
 
 }

@@ -108,6 +108,8 @@ void parser_register_case(struct history* history, struct node* case_node)
     vector_push(history->_switch.case_data.cases, &scase);
 }
 
+void parse_for_cast();
+void parse_datatype(struct datatype *dtype);
 void parse_for_ternary(struct history* history);
 int parse_expressionable_single(struct history *history);
 void parse_expressionable(struct history *history);
@@ -367,6 +369,12 @@ void parser_deal_with_additional_expression()
 void parse_for_parentheses(struct history* history)
 {
     expect_op("(");
+    // typedef is done in preprocessor, which runs first
+    if (token_peek_next()->type == TOKEN_TYPE_KEYWORD)
+    {
+        parse_for_cast();
+        return;
+    }
     struct node* left_node = NULL;
     struct node* tmp_node = node_peek_or_null();
     if (tmp_node && node_is_value_type(tmp_node))
@@ -406,11 +414,52 @@ void parse_for_comma(struct history* history)
     make_exp_node(left_node, right_node, ",");
 }
 
+void parse_for_array(struct history* history)
+{
+    // pop identifier
+    struct node* left_node = node_peek_or_null();
+    if (left_node)
+    {
+        node_pop();
+    }
+
+    expect_op("[");
+    parse_expressionable_root(history);
+    expect_sym(']');
+
+    struct node* exp_node = node_pop();
+    make_bracket_node(exp_node);
+
+    if (left_node)
+    {
+        struct node* bracket_node = node_pop();
+        make_exp_node(left_node, bracket_node, "[]");
+    }
+}
+
+void parse_for_cast()
+{
+    // "(" has already been parsed
+    struct datatype dtype = {};
+    parse_datatype(&dtype);
+    expect_sym(')');
+
+    parse_expressionable(history_begin(0));
+
+    // pop off node we just parsed
+    struct node* operand_node = node_pop();
+    make_cast_node(&dtype, operand_node);
+}
+
 int parse_exp(struct history *history)
 {
     if (S_EQ(token_peek_next()->sval, "("))
     {
         parse_for_parentheses(history);
+    }
+    else if (S_EQ(token_peek_next()->sval, "["))
+    {
+        parse_for_array(history);
     }
     else if (S_EQ(token_peek_next()->sval, "?"))
     {
