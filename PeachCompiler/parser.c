@@ -45,12 +45,13 @@ struct parser_scope_entity *parser_scope_last_entity_stop_global_scope()
 
 enum
 {
-    HISTORY_FLAG_INSIDE_UNION           = 0b00000001,
-    HISTORY_FLAG_IS_UPWARD_STACK        = 0b00000010,
-    HISTORY_FLAG_IS_GLOBAL_SCOPE        = 0b00000100,
-    HISTORY_FLAG_INSIDE_STRUCTURE       = 0b00001000,
-    HISTORY_FLAG_INSIDE_FUNCTION_BODY   = 0b00010000,
-    HISTORY_FLAG_IN_SWITCH_STATEMENT    = 0b00100000
+    HISTORY_FLAG_INSIDE_UNION                       = 0b00000001,
+    HISTORY_FLAG_IS_UPWARD_STACK                    = 0b00000010,
+    HISTORY_FLAG_IS_GLOBAL_SCOPE                    = 0b00000100,
+    HISTORY_FLAG_INSIDE_STRUCTURE                   = 0b00001000,
+    HISTORY_FLAG_INSIDE_FUNCTION_BODY               = 0b00010000,
+    HISTORY_FLAG_IN_SWITCH_STATEMENT                = 0b00100000,
+    HISTORY_FLAG_PARENTHESES_IS_NOT_A_FUNCTION_CALL = 0b01000000,
 };
 
 struct history_cases
@@ -107,6 +108,7 @@ void parser_register_case(struct history* history, struct node* case_node)
     vector_push(history->_switch.case_data.cases, &scase);
 }
 
+void parse_for_ternary(struct history* history);
 int parse_expressionable_single(struct history *history);
 void parse_expressionable(struct history *history);
 void parse_body(size_t *variable_size, struct history *history);
@@ -398,6 +400,10 @@ int parse_exp(struct history *history)
     if (S_EQ(token_peek_next()->sval, "("))
     {
         parse_for_parentheses(history);
+    }
+    else if (S_EQ(token_peek_next()->sval, "?"))
+    {
+        parse_for_ternary(history);
     }
     else
     {
@@ -1518,6 +1524,20 @@ void parse_break(struct history* history)
     expect_keyword("break");
     expect_sym(';');
     make_break_node();
+}
+
+void parse_for_ternary(struct history* history)
+{
+    struct node* condition_node = node_pop();
+    expect_op("?");
+    parse_expressionable_root(history_down(history, HISTORY_FLAG_PARENTHESES_IS_NOT_A_FUNCTION_CALL));
+    struct node* true_result_node = node_pop();
+    expect_sym(':');
+    parse_expressionable_root(history_down(history, HISTORY_FLAG_PARENTHESES_IS_NOT_A_FUNCTION_CALL));
+    struct node* false_result_node = node_pop();
+    make_ternary_node(true_result_node, false_result_node);
+    struct node* ternary_node = node_pop();
+    make_exp_node(condition_node, ternary_node, "?");
 }
 
 void parse_keyword(struct history *history)

@@ -63,6 +63,11 @@ void make_exp_node(struct node* left_node, struct node* right_node, const char* 
     node_create(&(struct node){.type=NODE_TYPE_EXPRESSION,.exp.left=left_node,.exp.right=right_node,.exp.op=op});
 }
 
+void make_ternary_node(struct node* true_node, struct node* false_node)
+{
+    node_create(&(struct node){.type=NODE_TYPE_TENARY, .ternary.true_node=true_node, .ternary.false_node=false_node});
+}
+
 void make_case_node(struct node* exp_node)
 {
     node_create(&(struct node){.type=NODE_TYPE_STATEMENT_CASE, .stmt._case.exp=exp_node});
