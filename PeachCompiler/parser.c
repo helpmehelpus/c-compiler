@@ -3,6 +3,7 @@
 #include <assert.h>
 
 static struct compile_process *current_process;
+static struct fixup_system* parser_fixup_sys;
 static struct token *parser_last_token;
 
 extern struct node *parser_current_body;
@@ -102,9 +103,8 @@ void parser_register_case(struct history* history, struct node* case_node)
 {
     assert(history->flags & HISTORY_FLAG_IN_SWITCH_STATEMENT);
     struct parsed_switch_case scase;
-    // All cases are numerical in C
-    #warning "Must be set to the case index. Need to implement"
-    scase.index = 0;
+    // Our cases will only be integers for this compiler
+    scase.index = case_node->stmt._case.exp->llnum;
     vector_push(history->_switch.case_data.cases, &scase);
 }
 
@@ -782,6 +782,31 @@ void parse_expressionable_root(struct history *history)
     node_push(result_node);
 }
 
+struct datatype_struct_node_fix_private
+{
+    struct node* node;
+};
+
+bool datatype_struct_node_fix(struct fixup* fixup)
+{
+    struct datatype_struct_node_fix_private* private = fixup_private(fixup);
+    struct datatype* dtype = &private->node->var.type;
+    dtype->type = DATA_TYPE_STRUCT;
+    dtype->size = size_of_struct(dtype->type_str);
+    dtype->struct_node = struct_node_for_name(current_process, dtype->type_str);
+    if (!dtype->struct_node)
+    {
+        // No structure associated, i.e., structure never existed
+        return false;
+    }
+    return true;
+}
+
+void datatype_struct_node_end(struct fixup* fixup)
+{
+    free(fixup_private(fixup));
+}
+
 void make_variable_node(struct datatype *dtype, struct token *name_token, struct node *value_node)
 {
     const char *name_str = NULL;
@@ -791,6 +816,16 @@ void make_variable_node(struct datatype *dtype, struct token *name_token, struct
     }
 
     node_create(&(struct node){.type = NODE_TYPE_VARIABLE, .var.name = name_str, .var.type = *dtype, .var.val = value_node});
+    struct node* var_node = node_peek_or_null();
+    // Fixup should be created when we cannot resolve the structure just yet. i.e. forward declarations
+    // Disregarding unions for now
+    if (var_node->var.type.type == DATA_TYPE_STRUCT && !var_node->var.type.struct_node)
+    {
+        struct datatype_struct_node_fix_private* private = calloc(1, sizeof(struct datatype_struct_node_fix_private));
+        private->node = var_node;
+        // We need a new fixup config every time
+        fixup_register(parser_fixup_sys, &(struct fixup_config){.fix=datatype_struct_node_fix, .end=datatype_struct_node_end, .private=private});
+    }
 }
 
 void parser_scope_offset_for_stack(struct node *node, struct history *history)
@@ -1338,6 +1373,12 @@ struct vector* parse_function_arguments(struct history* history)
     return arguments_vector;
 }
 
+void parse_forward_declaration(struct datatype* dtype)
+{
+    // Forward declaration is for structs only
+    parse_struct(dtype);
+}
+
 // Important function
 void parse_variable_function_or_struct_union(struct history *history)
 {
@@ -1351,6 +1392,12 @@ void parse_variable_function_or_struct_union(struct history *history)
         struct node* su_node = node_pop();
         symresolver_build_for_node(current_process, su_node);
         node_push(su_node);
+        return;
+    }
+
+    if (token_next_is_symbol(';'))
+    {
+        parse_forward_declaration(&dtype);
         return;
     }
 
@@ -1753,6 +1800,7 @@ int parse(struct compile_process *process)
     parser_last_token = NULL;
     node_set_vector(process->node_vec, process->node_tree_vec);
     parser_blank_node = node_create(&(struct node){.type=NODE_TYPE_BLANK});
+    parser_fixup_sys = fixup_sys_new();
 
     struct node *node = NULL;
     vector_set_peek_pointer(process->token_vec, 0);
@@ -1761,5 +1809,7 @@ int parse(struct compile_process *process)
         node = node_peek();
         vector_push(process->node_tree_vec, &node);
     }
+
+    assert(fixups_resolve(parser_fixup_sys));
     return PARSE_ALL_OK;
 }
