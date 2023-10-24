@@ -63,6 +63,16 @@ void make_exp_node(struct node* left_node, struct node* right_node, const char* 
     node_create(&(struct node){.type=NODE_TYPE_EXPRESSION,.exp.left=left_node,.exp.right=right_node,.exp.op=op});
 }
 
+void make_continue_node()
+{
+    node_create(&(struct node){.type=NODE_TYPE_STATEMENT_CONTINUE});
+}
+
+void make_break_node()
+{
+    node_create(&(struct node){.type=NODE_TYPE_STATEMENT_BREAK});
+}
+
 void make_exp_parentheses_node(struct node* exp_node)
 {
     node_create(&(struct node){.type=NODE_TYPE_EXPRESSION_PARENTHESES, .parenthesis.exp=exp_node});

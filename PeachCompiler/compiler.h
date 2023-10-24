@@ -584,6 +584,8 @@ struct node* struct_node_for_name(struct compile_process* current_process, const
 bool node_is_expression_or_parentheses(struct node* node);
 bool node_is_value_type(struct node* node);
 
+void make_continue_node();
+void make_break_node();
 void make_exp_node(struct node* left_node, struct node* right_node, const char* op);
 void make_exp_parentheses_node(struct node* exp_node);
 void make_bracket_node(struct node* node);
