@@ -223,6 +223,11 @@ enum
     PARSE_GENERAL_ERROR
 };
 
+enum {
+    CODEGEN_ALL_OK,
+    CODEGEN_GENERAL_ERROR
+};
+
 enum
 {
     NODE_TYPE_EXPRESSION,
@@ -594,6 +599,8 @@ void* lex_process_private(struct lex_process* process);
 struct vector* lex_process_tokens(struct lex_process* process);
 int lex(struct lex_process* process);
 int parse(struct compile_process* process);
+
+int codegen(struct compile_process* process);
 
 /**
  * @brief Builds tokens for the input string.
