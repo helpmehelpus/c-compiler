@@ -1,3 +1,1 @@
-int x;
-int y;
-char rato;
+int a = 50;

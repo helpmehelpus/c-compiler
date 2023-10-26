@@ -1,25 +1,25 @@
 #include "compiler.h"
+#include "helpers/vector.h"
 #include <stdarg.h>
 #include <stdio.h>
-#include "helpers/vector.h"
 #include <assert.h>
-
 static struct compile_process* current_process = NULL;
 
 void codegen_new_scope(int flags)
 {
-#warning "The resolver needs to exist for codegen_new_scope to work"
+#warning "The resolver needs to exist for this to work"
 }
 
 void codegen_finish_scope()
 {
-#warning "Need a resolver for this to work"
+#warning "You need to invent a resolver for this to work"
 }
 
 struct node* codegen_node_next()
 {
     return vector_peek_ptr(current_process->node_tree_vec);
 }
+
 
 void asm_push_args(const char* ins, va_list args)
 {
@@ -29,7 +29,6 @@ void asm_push_args(const char* ins, va_list args)
     fprintf(stdout, "\n");
     if (current_process->ofile)
     {
-        // Write asm to file
         vfprintf(current_process->ofile, ins, args2);
         fprintf(current_process->ofile, "\n");
     }
@@ -54,25 +53,19 @@ void asm_push_no_nl(const char* ins, ...)
     {
         va_list args;
         va_start(args, ins);
-        // Write asm to file
         vfprintf(current_process->ofile, ins, args);
+        va_end(args);
     }
 }
 
-int codegen_label_count()
-{
-    static int count = 0;
-    count++;
-    return count;
-}
 
 const char* codegen_get_label_for_string(const char* str)
 {
     const char* result = NULL;
-    struct code_generator* gen = current_process->generator;
-    vector_set_peek_pointer(gen->string_table, 0);
-    struct string_table_element* current = vector_peek_ptr(gen->string_table);
-    while (current)
+    struct code_generator* generator = current_process->generator;
+    vector_set_peek_pointer(generator->string_table, 0);
+    struct string_table_element* current = vector_peek_ptr(generator->string_table);
+    while(current)
     {
         if (S_EQ(current->str, str))
         {
@@ -80,7 +73,7 @@ const char* codegen_get_label_for_string(const char* str)
             break;
         }
 
-        current = vector_peek_ptr(gen->string_table);
+        current = vector_peek_ptr(generator->string_table);
     }
 
     return result;
@@ -91,7 +84,7 @@ const char* codegen_register_string(const char* str)
     const char* label = codegen_get_label_for_string(str);
     if (label)
     {
-        // Duplicates are handled here
+        // We already registered this string, just return the label to the string memory.
         return label;
     }
 
@@ -103,9 +96,10 @@ const char* codegen_register_string(const char* str)
     return str_elem->label;
 }
 
+
 struct code_generator* codegenerator_new(struct compile_process* process)
 {
-    struct code_generator* generator = calloc(1, sizeof(struct code_generator));
+    struct code_generator* generator= calloc(1, sizeof(struct code_generator));
     generator->string_table = vector_create(sizeof(struct string_table_element*));
     generator->entry_points = vector_create(sizeof(struct codegen_entry_point*));
     generator->exit_points = vector_create(sizeof(struct codegen_exit_point*));
@@ -126,8 +120,12 @@ struct codegen_exit_point* codegen_current_exit_point()
     return vector_back_ptr_or_null(gen->exit_points);
 }
 
-
-
+int codegen_label_count()
+{
+    static int count = 0;
+    count++;
+    return count;
+}
 void codegen_begin_exit_point()
 {
     int exit_point_id = codegen_label_count();
@@ -181,6 +179,7 @@ void codegen_end_entry_point()
     vector_pop(gen->entry_points);
 }
 
+
 void codegen_goto_entry_point(struct node* current_node)
 {
     struct code_generator* gen = current_process->generator;
@@ -203,7 +202,7 @@ void codegen_end_entry_exit_point()
 static const char* asm_keyword_for_size(size_t size, char* tmp_buf)
 {
     const char* keyword = NULL;
-    switch (size)
+    switch(size)
     {
         case DATA_SIZE_BYTE:
             keyword = "db";
@@ -214,9 +213,11 @@ static const char* asm_keyword_for_size(size_t size, char* tmp_buf)
         case DATA_SIZE_DWORD:
             keyword = "dd";
             break;
+
         case DATA_SIZE_DDWORD:
             keyword = "dq";
             break;
+
         default:
             sprintf(tmp_buf, "times %lld db ", (unsigned long)size);
             return tmp_buf;
@@ -231,20 +232,21 @@ void codegen_generate_global_variable_for_primitive(struct node* node)
     char tmp_buf[256];
     if (node->var.val != NULL)
     {
-        // handle the value
+        // Handle the value.
         if (node->var.val->type == NODE_TYPE_STRING)
         {
-            #warning "Need to handle string value"
+#warning "dont forget to handle the string value"
         }
         else
         {
-            #warning "Need to handle numeric value"
+            asm_push("%s: %s %lld", node->var.name, asm_keyword_for_size(variable_size(node), tmp_buf), node->var.val->llnum);
         }
     }
-
-    asm_push("%s: %s 0", node->var.name, asm_keyword_for_size(variable_size(node), tmp_buf));
+    else
+    {
+        asm_push("%s: %s 0", node->var.name, asm_keyword_for_size(variable_size(node), tmp_buf));
+    }
 }
-
 void codegen_generate_global_variable(struct node* node)
 {
     asm_push("; %s %s", node->var.type.type_str, node->var.name);
@@ -257,14 +259,13 @@ void codegen_generate_global_variable(struct node* node)
         case DATA_TYPE_LONG:
             codegen_generate_global_variable_for_primitive(node);
             break;
+
         case DATA_TYPE_DOUBLE:
         case DATA_TYPE_FLOAT:
-            // Doubles and floats left out to simplify assembly
-            compiler_error(current_process, "Doubles and floats are not supported in this subset of C\n");
+            compiler_error(current_process, "Doubles and floats are not supported in our subset of C\n");
             break;
     }
 }
-
 void codegen_generate_data_section_part(struct node* node)
 {
     switch (node->type)
@@ -277,13 +278,11 @@ void codegen_generate_data_section_part(struct node* node)
             break;
     }
 }
-
-// Does not go deep into nodes; we only care about globals here
 void codegen_generate_data_section()
 {
     asm_push("section .data");
     struct node* node = codegen_node_next();
-    while (node)
+    while(node)
     {
         codegen_generate_data_section_part(node);
         node = codegen_node_next();
@@ -292,28 +291,28 @@ void codegen_generate_data_section()
 
 void codegen_generate_root_node(struct node* node)
 {
-    // Process functions
+    // PROCESS ANY FUNCTIONS.
 }
 
 void codegen_generate_root()
 {
     asm_push("section .text");
     struct node* node = NULL;
-    while ((node = codegen_node_next()) != NULL)
+    while((node = codegen_node_next()) != NULL)
     {
         codegen_generate_root_node(node);
     }
 }
 
-// Generates according to ASCII table, as nasm can't understand new line or tab
 bool codegen_write_string_char_escaped(char c)
 {
     const char* c_out = NULL;
-    switch (c)
+    switch(c)
     {
         case '\n':
             c_out = "10";
             break;
+
         case '\t':
             c_out = "9";
             break;
@@ -325,7 +324,6 @@ bool codegen_write_string_char_escaped(char c)
     }
     return c_out != NULL;
 }
-
 void codegen_write_string(struct string_table_element* element)
 {
     asm_push_no_nl("%s: db ", element->label);
@@ -334,26 +332,26 @@ void codegen_write_string(struct string_table_element* element)
     {
         char c = element->str[i];
         bool handled = codegen_write_string_char_escaped(c);
-
-        if (handled)
+        if(handled)
         {
             continue;
         }
         asm_push_no_nl("'%c', ", c);
     }
+
     asm_push_no_nl("0");
     asm_push("");
 }
 
 void codegen_write_strings()
 {
-    struct code_generator* gen = current_process->generator;
-    vector_set_peek_pointer(gen->string_table, 0);
-    struct string_table_element* element = vector_peek_ptr(gen->string_table);
-    while (element)
+    struct code_generator* generator = current_process->generator;
+    vector_set_peek_pointer(generator->string_table, 0);
+    struct string_table_element* element = vector_peek_ptr(generator->string_table);
+    while(element)
     {
         codegen_write_string(element);
-        element = vector_peek_ptr(gen->string_table);
+        element = vector_peek_ptr(generator->string_table);
     }
 }
 
@@ -374,15 +372,8 @@ int codegen(struct compile_process* process)
     codegen_generate_root();
     codegen_finish_scope();
 
-    codegen_register_string("Hello world!!");
-    codegen_register_string("Hello world!!");
-    codegen_register_string("Hello world!!");
-    codegen_register_string("Hello RATOS!!\n");
-
-
-    // Generate read-only data
+    // Generate read only data
     codegen_generate_rod();
 
     return 0;
 }
-
