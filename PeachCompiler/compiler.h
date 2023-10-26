@@ -179,6 +179,25 @@ struct symbol
     void* data;
 };
 
+struct codegen_entry_point
+{
+    int id;
+};
+
+struct codegen_exit_point
+{
+    int id;
+};
+
+struct code_generator
+{
+    // Vector of struct entry_point*
+    struct vector* entry_points;
+    // Vector of struct exit_point*
+    struct vector* exit_points;
+};
+
+
 struct compile_process
 {
     // The flags in regards to how this file should be compiled
@@ -214,6 +233,8 @@ struct compile_process
         // struct vector* multiple symbol tables stored in here..
         struct vector* tables;
     } symbols;
+
+    struct code_generator* generator;
 };
 
 
@@ -316,6 +337,7 @@ struct parsed_switch_case
     // index of parsed case
     int index;
 };
+
 
 struct node
 {
@@ -598,9 +620,11 @@ void lex_process_free(struct lex_process* process);
 void* lex_process_private(struct lex_process* process);
 struct vector* lex_process_tokens(struct lex_process* process);
 int lex(struct lex_process* process);
+
 int parse(struct compile_process* process);
 
 int codegen(struct compile_process* process);
+struct code_generator* codegenerator_new(struct compile_process* process);
 
 /**
  * @brief Builds tokens for the input string.
