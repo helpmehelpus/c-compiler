@@ -196,6 +196,34 @@ struct string_table_element
     const char label[50];
 };
 
+struct stack_frame_data
+{
+    /**
+     * Datatype that was pushed to the stack (int, char, ... )
+     */
+    struct datatype* dtype;
+};
+
+struct stack_frame_element
+{
+    int flags;
+    /**
+     * Saved based pointer, resolved value, ....
+     */
+    int type;
+    /**
+     * Describes the frame element. Not a variable (result_value, ...)
+     */
+    const char* name;
+
+    /**
+     * Offset relative to base pointer (EPB-4, EBP-8,...)
+     */
+    int offset_from_bp;
+
+    struct stack_frame_data data;
+};
+
 struct code_generator
 {
     // Vector of struct string_table_element*
@@ -476,6 +504,10 @@ struct node
             // NULL if this is a function prototype
             struct node* body_n;
 
+            struct stack_frame {
+                struct vector* elements;
+            } frame;
+
             // Stack size for all variables inside the function
             size_t stack_size;
         } func;
@@ -561,6 +593,232 @@ struct node
         unsigned long long llnum;
     };
 
+};
+
+enum
+{
+    RESOLVER_ENTITY_FLAG_IS_STACK                   = 0b00000001,
+    RESOLVER_ENTITY_FLAG_NO_MERGE_WITH_NEXT_ENTITY  = 0b00000010,
+    RESOLVER_ENTITY_FLAG_NO_MERGE_WITH_LEFT_ENTITY  = 0b00000100,
+    RESOLVER_ENTITY_FLAG_NO_INDIRECTION             = 0b00001000,
+    RESOLVER_ENTITY_FLAG_JUST_USE_OFFSET            = 0b00010000,
+    RESOLVER_ENTITY_FLAG_IS_POINTER_ARRAY_ENTITY    = 0b00100000,
+    RESOLVER_ENTITY_FLAG_WAS_CASTED                 = 0b01000000,
+    RESOLVER_ENTITY_FLAG_USES_ARRAY_BRACKETS        = 0b10000000,
+};
+
+enum
+{
+    RESOLVER_ENTITY_TYPE_VARAIBLE,
+    RESOLVER_ENTITY_TYPE_FUNCTION,
+    RESOLVER_ENTITY_TYPE_STRUCTURE,
+    RESOLVER_ENTITY_TYPE_FUNCTION_CALL,
+    RESOLVER_ENTITY_TYPE_ARRAY_BRACKET,
+    RESOLVER_ENTITY_TYPE_RULE,
+    RESOLVER_ENTITY_TYPE_GENERAL,
+    RESOLVER_ENTITY_TYPE_UNARY_GET_ADDRESS,
+    RESOLVER_ENTITY_TYPE_UNARY_INDIRECTION,
+    RESOLVER_ENTITY_TYPE_UNSUPPORTED,
+    RESOLVER_ENTITY_TYPE_CAST,
+};
+
+enum
+{
+    RESOLVER_SCOPE_FLAG_IS_STACK = 0b00000001,
+};
+
+struct resolver_result;
+struct resolver_proces;
+struct resolver_scope;
+struct resolver_entity;
+struct resolver_process;
+
+// Kind of how you do inheritance in C
+typedef void*(*RESOLVER_NEW_ARRAY_BRACKET_ENTITY)(struct resolver_result* result, struct node* array_entity_node);
+typedef void(*RESOLVER_DELETE_SCOPE)(struct resolver_scope* scope);
+typedef void(*RESOLVER_DELETE_ENTITY)(struct resolver_entity* entity);
+typedef struct resolver_entity*(*RESOLVER_MERGE_ENTITIES)(struct resolver_process* process, struct resolver_result* result, struct resolver_entity* left_entity, struct resolver_entity* right_entity);
+typedef void*(*RESOLVER_MAKE_PRIVATE)(struct resolver_entity* entity, struct node* node, int offset, struct resolver_scope* scope);
+typedef void(*RESOLVER_SET_RESULT_BASE)(struct resolver_result* result, struct resolver_entity* base_entity);
+
+struct resolver_callbacks
+{
+    RESOLVER_NEW_ARRAY_BRACKET_ENTITY new_array_entity;
+    RESOLVER_DELETE_SCOPE delete_scope;
+    RESOLVER_DELETE_ENTITY delete_entity;
+    RESOLVER_MERGE_ENTITIES merge_entities;
+    RESOLVER_MAKE_PRIVATE make_private;
+    RESOLVER_SET_RESULT_BASE set_result_base;
+};
+
+// Main resolver process
+struct resolver_process
+{
+    struct resolover_scope
+    {
+        struct resolver_scope* root;
+        struct resolver_scope* current;
+    } scope;
+
+    struct compile_process* process;
+    struct resolver_callbacks callbacks;
+};
+
+struct resolver_array_data
+{
+    // Vector of entities
+    struct vector* array_entities;
+};
+
+enum
+{
+    RESOLVER_RESULT_FLAG_FAILED                                 = 0b00000001,
+    RESOLVER_RESULT_FLAG_RUNTIME_NEEDED_TO_FINISH_PATH          = 0b00000010,
+    RESOLVER_RESULT_FLAG_PROCESSING_ARRAY_ENTITIES              = 0b00000100,
+    RESOLVER_RESULT_FLAG_HAS_POINTER_ARRAY_ACCESS               = 0b00001000,
+    RESOLVER_RESULT_FLAG_FIRST_ENTITY_LOAD_TO_EBX               = 0b00010000,
+    RESOLVER_RESULT_FLAG_FIRST_ENTITY_PUSH_VALUE                = 0b00100000,
+    RESOLVER_RESULT_FLAG_FINAL_INDIRECTION_REQUIRED_FOR_VALUE   = 0b01000000,
+    RESOLVER_RESULT_FLAG_DOES_GET_ADDRESS                       = 0b10000000,
+};
+
+
+
+// Codegen will iterate on this to generate code
+struct resolver_result
+{
+    struct resolver_entity* first_entity_const;
+
+    // Variable at start of this expression d in d.a.b.c
+    struct resolver_entity* identifier;
+
+    // Last structure or union that was found by the resolver
+    struct resolver_entity* last_struct_union_entity;
+
+    struct resolver_array_data array_data;
+
+    // Root entity
+    struct resolver_entity* entity;
+
+    struct resolver_entity* last_entity;
+
+    int flags;
+
+    size_t count;
+
+    // Any offsets that can be computed at compile time
+    struct resolver_result_base
+    {
+        // Maximum address that can be computed at compile time e.g. [ebp-4] for locals, [name+4] for globals
+        char address[60];
+
+        // EBP if it's on the stack, or var name, func name, ...
+        char base_address[60];
+
+        // Relative to base
+        int offset;
+    } base;
+};
+
+struct resolver_scope
+{
+    int flags;
+    struct vector* entities;
+    struct resolver_scope* next;
+    struct resolver_scope* prev;
+
+    // Facilitates abstraction
+    void* private;
+};
+
+struct resolver_entity
+{
+    int type;
+    int flags;
+    // Name of entity. If it parses a variable, its name will be here. Same for function names and so on
+    const char* name;
+
+    // Offset from the stack --> [EBP + offset]
+    int offset;
+
+    // Node that sources the entity. Entities can be seen as descriptors of nodes
+    struct node* node;
+
+    union
+    {
+        struct resolver_entity_var_data
+        {
+            struct datatype dtype;
+
+            // When computing offsets, we need to know how many bytes to multiply by to get relative offset
+            struct resolver_array_runtime
+            {
+                struct datatype dtype;
+                struct node* index_node;
+                int multiplier;
+            } array_runtime;
+        } var_data;
+
+        struct resolver_array
+        {
+            struct datatype dtype;
+            int multiplier;
+            // 50 in a[50] = 0;
+            struct node* array_index_node;
+            int index;
+        } array;
+
+        struct resolver_entity_function_call_data
+        {
+            // Array of nodes
+            struct vector* arguments;
+
+            // Total bytes used by function call
+            size_t stack_size;
+        } func_call_data;
+
+        struct resolver_entity_rule
+        {
+            struct resolver_entity_rule_left
+            {
+                int flags;
+            } left;
+
+            struct resolver_entity_rule_right
+            {
+                int flags;
+            } right;
+
+        } rule;
+
+        struct resolver_indirection
+        {
+            // Number of dereferences to find actual value, e.g. 3 in ***p
+            int depth;
+        } indirection;
+    };
+
+    struct entity_last_resolve
+    {
+        struct node* referencing_node;
+    } last_resolve;
+
+    // Datatype of resolver entity. Can change when a cast occurs
+    struct datatype dtype;
+
+    // Scope that the entity belongs to
+    struct resolver_scope* scope;
+
+    struct resolver_result* result;
+
+    // Main resolver process, just like compile_process
+    struct resolver_proces* process;
+
+    // Only accessible by the creator of the entity
+    void* private;
+
+    struct resolver_entity* next;
+    struct resolver_entity* prev;
 };
 
 enum
@@ -735,12 +993,13 @@ size_t variable_size_for_list(struct node* var_list_node);
 struct node* variable_node(struct node* node);
 bool variable_node_is_primitive(struct node* node);
 
+// padding and alignment functions
 int padding(int val, int to);
 int align_value(int val, int to);
 int align_value_treat_positive(int val, int to);
 int compute_sum_padding(struct vector* vec);
 
-
+// scope functions
 struct scope* scope_new(struct compile_process* process, int flags);
 struct scope* scope_create_root(struct compile_process* process);
 void scope_free_root(struct compile_process* process);
@@ -755,6 +1014,7 @@ void scope_push(struct compile_process* process, void* ptr, size_t elem_size);
 void scope_finish(struct compile_process* process);
 struct scope* scope_current(struct compile_process* process);
 
+// symresolver functions
 void symresolver_initialize(struct compile_process* process);
 void symresolver_new_table(struct compile_process* process);
 void symresolver_end_table(struct compile_process* process);
@@ -763,6 +1023,40 @@ struct symbol* symresolver_get_symbol(struct compile_process* process, const cha
 struct symbol* symresolver_get_symbol_for_native_function(struct compile_process* process, const char* name);
 
 size_t function_node_argument_stack_addition(struct node* node);
+
+// stack frame functions
+// 4 bytes for our 32-bit compiler
+#define STACK_PUSH_SIZE 4
+
+enum
+{
+    STACK_FRAME_ELEMENT_TYPE_LOCAL_VARIABLE,
+    STACK_FRAME_ELEMENT_TYPE_SAVED_REGISTER,
+    STACK_FRAME_ELEMENT_TYPE_SAVED_BP,
+    STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE,
+    STACK_FRAME_ELEMENT_TYPE_UNKOWN,
+};
+
+enum
+{
+    STACK_FRAME_ELEMENT_FLAG_IS_PUSHED_ADDRESS    = 0b00000001,
+    STACK_FRAME_ELEMENT_FLAG_ELEMENT_NOT_FOUND    = 0b00000010,
+    STACK_FRAME_ELEMENT_FLAG_IS_NUMERICAL         = 0b00000100,
+    STACK_FRAME_ELEMENT_FLAG_HAS_DATATYPE         = 0b00001000,
+};
+
+
+void stackframe_pop(struct node* function_node);
+struct stack_frame_element* stackframe_back(struct node* func_node);
+// these expect functions are to help us troubleshoot
+struct stack_frame_element* stackframe_back_expect(struct node* func_node, int expecting_type, const char* expecting_name);
+void stackframe_pop_expecting(struct node* func_node, int expecting_type, const char* expecting_name);
+void stackframe_peek_start(struct node* func_node);
+struct stack_frame_element* stackframe_peek(struct node* func_node);
+void stackframe_push(struct node* function_node, struct stack_frame_element* element);
+void stackframe_sub(struct node* function_node, int type, const char* name, size_t amount);
+void stackframe_add(struct node* function_node, int type, const char* name, size_t amount);
+void stackframe_assert_empty(struct node* func_node);
 
 #define TOTAL_OPERATOR_GROUPS 14
 #define MAX_OPERATORS_IN_GROUP 12
