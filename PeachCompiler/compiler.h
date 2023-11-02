@@ -628,10 +628,9 @@ enum
 };
 
 struct resolver_result;
-struct resolver_proces;
+struct resolver_process;
 struct resolver_scope;
 struct resolver_entity;
-struct resolver_process;
 
 // Kind of how you do inheritance in C
 typedef void*(*RESOLVER_NEW_ARRAY_BRACKET_ENTITY)(struct resolver_result* result, struct node* array_entity_node);
@@ -660,7 +659,7 @@ struct resolver_process
         struct resolver_scope* current;
     } scope;
 
-    struct compile_process* process;
+    struct compile_process* compiler;
     struct resolver_callbacks callbacks;
 };
 
@@ -812,7 +811,7 @@ struct resolver_entity
     struct resolver_result* result;
 
     // Main resolver process, just like compile_process
-    struct resolver_proces* process;
+    struct resolver_process* process;
 
     // Only accessible by the creator of the entity
     void* private;
