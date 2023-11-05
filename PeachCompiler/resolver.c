@@ -948,14 +948,210 @@ void resolver_execute_rules(struct resolver_process* resolver, struct resolver_r
     resolver_push_vector_of_entities(result, saved_entities);
 }
 
-void resolver_merge_compile_times(struct resolver_process* resolver, struct resolver_result* result)
+struct resolver_entity* resolver_merge_compile_time_result(struct resolver_process* resolver, struct resolver_result* result, struct resolver_entity* left_entity, struct resolver_entity* right_entity)
 {
+    if (left_entity && right_entity)
+    {
+        if (left_entity->flags & RESOLVER_ENTITY_FLAG_NO_MERGE_WITH_NEXT_ENTITY || right_entity->flags & RESOLVER_ENTITY_FLAG_NO_MERGE_WITH_LEFT_ENTITY)
+        {
+            goto no_merge_possible;
+        }
 
+        struct resolver_entity* result_entity = resolver->callbacks.merge_entities(resolver, result, left_entity, right_entity);
+        if (!result_entity)
+        {
+            goto no_merge_possible;
+        }
+
+        return result_entity;
+    }
+
+    no_merge_possible:
+    return NULL;
+}
+
+void _resolver_merge_compile_time_entities(struct resolver_process* resolver, struct resolver_result* result)
+{
+    struct vector* saved_entities = vector_create(sizeof(struct resolver_entity*));
+    while (1)
+    {
+        struct resolver_entity* right_entity = resolver_result_pop(result);
+        struct resolver_entity* left_entity = resolver_result_pop(result);
+        if (!right_entity)
+        {
+            break;
+        }
+
+        if (!left_entity)
+        {
+            // No real work to do if there is only one entity
+            resolver_result_entity_push(result, right_entity);
+            break;
+        }
+
+        struct resolver_entity* merged_entity = resolver_merge_compile_time_result(resolver, result, left_entity, right_entity);
+        if (merged_entity)
+        {
+            resolver_result_entity_push(result, merged_entity);
+            continue;
+        }
+
+        right_entity->flags |= RESOLVER_ENTITY_FLAG_NO_MERGE_WITH_LEFT_ENTITY;
+        vector_push(saved_entities, &right_entity);
+        // Left entity may still be merged with next entity, so we push it back to the stack
+        resolver_result_entity_push(result, left_entity);
+    }
+
+    resolver_push_vector_of_entities(result, saved_entities);
+    vector_free(saved_entities);
+}
+
+void resolver_merge_compile_time_entities(struct resolver_process* resolver, struct resolver_result* result)
+{
+    size_t total_entities = 0;
+    do
+    {
+        total_entities = result->count;
+        _resolver_merge_compile_time_entities(resolver, result);
+    } while (total_entities != 1 && total_entities != result->count);
+}
+
+// Sets flags to inform generator what it needs to do
+void resolver_finalise_result_flags(struct resolver_process* resolver, struct resolver_result* result)
+{
+    int flags = RESOLVER_RESULT_FLAG_FIRST_ENTITY_PUSH_VALUE;
+    struct resolver_entity* entity = result->entity;
+    struct resolver_entity* first_entity = entity;
+    struct resolver_entity* last_entity = result->last_entity;
+    bool does_get_address = false;
+    if (entity == last_entity)
+    {
+        // Single entity
+        if (last_entity->type == RESOLVER_ENTITY_TYPE_VARAIBLE && datatype_is_struct_or_union_non_pointer(&last_entity->dtype))
+        {
+            flags |= RESOLVER_RESULT_FLAG_FIRST_ENTITY_LOAD_TO_EBX;
+            flags &= ~RESOLVER_RESULT_FLAG_FIRST_ENTITY_PUSH_VALUE;
+        }
+        result->flags = flags;
+        return;
+    }
+
+    while (entity)
+    {
+        if (entity->flags & RESOLVER_ENTITY_FLAG_DO_INDIRECTION)
+        {
+            // Load address of first entity
+            flags |= RESOLVER_RESULT_FLAG_FIRST_ENTITY_LOAD_TO_EBX | RESOLVER_RESULT_FLAG_FINAL_INDIRECTION_REQUIRED_FOR_VALUE;
+            flags &= ~RESOLVER_RESULT_FLAG_FIRST_ENTITY_PUSH_VALUE;
+        }
+
+        if (entity->type == RESOLVER_ENTITY_TYPE_UNARY_GET_ADDRESS)
+        {
+            flags |= RESOLVER_RESULT_FLAG_FIRST_ENTITY_LOAD_TO_EBX | RESOLVER_RESULT_FLAG_DOES_GET_ADDRESS;
+            flags &= ~RESOLVER_RESULT_FLAG_FIRST_ENTITY_PUSH_VALUE | RESOLVER_RESULT_FLAG_FINAL_INDIRECTION_REQUIRED_FOR_VALUE;
+            does_get_address = true;
+        }
+
+        if (entity->type == RESOLVER_ENTITY_TYPE_FUNCTION_CALL)
+        {
+            flags |= RESOLVER_RESULT_FLAG_FIRST_ENTITY_LOAD_TO_EBX;
+            flags &= ~RESOLVER_RESULT_FLAG_FIRST_ENTITY_PUSH_VALUE;
+        }
+
+        if (entity->type == RESOLVER_ENTITY_TYPE_ARRAY_BRACKET)
+        {
+            if (entity->dtype.flags & DATATYPE_FLAG_IS_POINTER)
+            {
+                flags |= RESOLVER_RESULT_FLAG_FIRST_ENTITY_PUSH_VALUE;
+                flags &= ~RESOLVER_RESULT_FLAG_FIRST_ENTITY_LOAD_TO_EBX;
+            }
+            else
+            {
+                flags |= RESOLVER_RESULT_FLAG_FIRST_ENTITY_LOAD_TO_EBX;
+                flags &= ~RESOLVER_RESULT_FLAG_FIRST_ENTITY_PUSH_VALUE;
+            }
+
+            if (entity->flags & RESOLVER_ENTITY_FLAG_IS_POINTER_ARRAY_ENTITY)
+            {
+                flags |= RESOLVER_RESULT_FLAG_FINAL_INDIRECTION_REQUIRED_FOR_VALUE;
+            }
+        }
+
+        if (entity->type == RESOLVER_ENTITY_TYPE_GENERAL)
+        {
+            flags |= RESOLVER_RESULT_FLAG_FIRST_ENTITY_LOAD_TO_EBX | RESOLVER_RESULT_FLAG_FINAL_INDIRECTION_REQUIRED_FOR_VALUE;
+            flags &= ~RESOLVER_RESULT_FLAG_FIRST_ENTITY_PUSH_VALUE;
+        }
+
+        entity = last_entity;
+    }
+
+    if (last_entity->dtype.flags & DATATYPE_FLAG_IS_ARRAY && (!does_get_address && last_entity->type == RESOLVER_ENTITY_TYPE_VARAIBLE && !(last_entity->flags & RESOLVER_ENTITY_FLAG_USES_ARRAY_BRACKETS)))
+    {
+        flags &= ~RESOLVER_RESULT_FLAG_FINAL_INDIRECTION_REQUIRED_FOR_VALUE;
+    }
+    else if (last_entity->type == RESOLVER_ENTITY_TYPE_VARAIBLE)
+    {
+        flags |= RESOLVER_RESULT_FLAG_FINAL_INDIRECTION_REQUIRED_FOR_VALUE;
+    }
+
+    if (does_get_address)
+    {
+        flags &= ~RESOLVER_RESULT_FLAG_FINAL_INDIRECTION_REQUIRED_FOR_VALUE;
+    }
+
+    result->flags |= flags;
+}
+
+void resolver_finalise_unary(struct resolver_process* resolver, struct resolver_result* result, struct resolver_entity* entity)
+{
+    struct resolver_entity* previous_entity = entity->prev;
+    if (!previous_entity)
+    {
+        return;
+    }
+
+    entity->scope = previous_entity->scope;
+    entity->dtype = previous_entity->dtype;
+    entity->offset = previous_entity->offset;
+    if (entity->type == RESOLVER_ENTITY_TYPE_UNARY_INDIRECTION)
+    {
+        int indirection_depth = entity->indirection.depth;
+        entity->dtype.pointer_depth -= indirection_depth;
+        if (entity->dtype.pointer_depth <= 0)
+        {
+            entity->dtype.flags &= ~DATATYPE_FLAG_IS_POINTER;
+        }
+    }
+    else if (entity->type == RESOLVER_ENTITY_TYPE_UNARY_GET_ADDRESS)
+    {
+        entity->dtype.flags |= DATATYPE_FLAG_IS_POINTER;
+        entity->dtype.pointer_depth++;
+    }
+}
+
+void resolver_finalise_last_entity(struct resolver_process* resolver, struct resolver_result* result)
+{
+    struct resolver_entity* last_entity = resolver_result_peek(result);
+    switch (last_entity->type)
+    {
+        case RESOLVER_ENTITY_TYPE_UNARY_INDIRECTION:
+        case RESOLVER_ENTITY_TYPE_UNARY_GET_ADDRESS:
+            resolver_finalise_unary(resolver, result, last_entity);
+            break;
+    }
 }
 
 void resolver_finalise_result(struct resolver_process* resolver, struct resolver_result* result)
 {
-
+    struct resolver_entity* first_entity = resolver_result_entity_root(result);
+    if (!first_entity)
+    {
+        return;
+    }
+    resolver->callbacks.set_result_base(result, first_entity);
+    resolver_finalise_result_flags(resolver, result);
+    resolver_finalise_last_entity(resolver, result);
 }
 
 // resolves something like a.b.c = 50
@@ -970,7 +1166,7 @@ struct resolver_result* resolver_follow(struct resolver_process* resolver, struc
         result->flags |= RESOLVER_RESULT_FLAG_FAILED;
     }
     resolver_execute_rules(resolver, result);
-    resolver_merge_compile_times(resolver, result);
+    resolver_merge_compile_time_entities(resolver, result);
     resolver_finalise_result(resolver, result);
     return result;
 }
