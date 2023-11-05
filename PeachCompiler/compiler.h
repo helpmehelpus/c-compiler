@@ -653,7 +653,7 @@ struct resolver_callbacks
 // Main resolver process
 struct resolver_process
 {
-    struct resolover_scope
+    struct resolver_scopes
     {
         struct resolver_scope* root;
         struct resolver_scope* current;
@@ -934,6 +934,9 @@ bool node_is_expression(struct node* node, const char* op);
 bool node_is_struct_or_union(struct node* node);
 bool is_array_node(struct node* node);
 bool is_node_assignment(struct node* node);
+bool is_argument_node(struct node* node);
+bool node_valid(struct node* node);
+bool is_argument_operator(const char* op);
 
 bool is_access_node_with_op(struct node* node, const char* op);
 bool is_access_operator(const char* op);
