@@ -375,6 +375,20 @@ struct parsed_switch_case
     int index;
 };
 
+struct node;
+
+struct unary
+{
+    const char* op;
+    struct node* operand;
+    union
+    {
+        struct indirection
+        {
+            int depth;
+        } indirection;
+    };
+};
 
 struct node
 {
@@ -582,6 +596,8 @@ struct node
             struct datatype dtype;
             struct node* operand;
         } cast;
+
+        struct unary unary;
     };
 
     union
@@ -933,10 +949,12 @@ bool node_is_value_type(struct node* node);
 bool node_is_expression(struct node* node, const char* op);
 bool node_is_struct_or_union(struct node* node);
 bool is_array_node(struct node* node);
+bool op_is_indirection(const char* op);
 bool is_node_assignment(struct node* node);
 bool is_argument_node(struct node* node);
 bool node_valid(struct node* node);
 bool is_argument_operator(const char* op);
+bool is_unary_operator(const char* op);
 void datatype_decrement_pointer(struct datatype* dtype);
 size_t array_brackets_count(struct datatype* dtype);
 
@@ -968,6 +986,7 @@ void make_while_node(struct node* exp_node, struct node* body_node);
 void make_for_node(struct node* init_node, struct node* cond_node, struct node* loop_node, struct node* body_node);
 void make_return_node(struct node* exp_node);
 void make_if_node(struct node* cond_node, struct node* body_node, struct node* next_node);
+void make_unary_node(const char* op, struct node* operand_node);
 void make_else_node(struct node* body_node);
 
 struct node* node_pop();
