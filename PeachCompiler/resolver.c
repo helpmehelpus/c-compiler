@@ -805,6 +805,46 @@ struct resolver_entity* resolver_follow_cast(struct resolver_process* resolver, 
     return cast_entity;
 }
 
+struct resolver_entity* resolver_follow_indirection(struct resolver_process* resolver, struct node* node, struct resolver_result* result)
+{
+    resolver_follow_part(resolver, node->unary.operand, result);
+    struct resolver_entity* last_entity = resolver_result_peek(result);
+    if(!last_entity)
+    {
+        last_entity = resolver_follow_unsupported_node(resolver, node->unary.operand, result);
+    }
+
+    struct resolver_entity* unary_indirection_entity = resolver_create_new_unary_indirection_entity(resolver, result, node, node->unary.indirection.depth);
+    resolver_result_entity_push(result, unary_indirection_entity);
+    return unary_indirection_entity;
+}
+
+struct resolver_entity* resolver_follow_unary_address(struct resolver_process* resolver, struct node* node, struct resolver_result* result)
+{
+    // Follows &a.b.c (trying to find the address of "c")
+    resolver_follow_part(resolver, node->unary.operand, result);
+
+    struct resolver_entity* last_entity = resolver_result_peek(result);
+    struct resolver_entity* unary_address_entity = resolver_create_new_unary_get_address_entity(resolver, result, &last_entity->dtype, node, last_entity->scope, last_entity->offset);
+    resolver_result_entity_push(result, unary_address_entity);
+    return unary_address_entity;
+}
+
+struct resolver_entity* resolver_follow_unary(struct resolver_process* resolver, struct node* node, struct resolver_result* result)
+{
+    struct resolver_entity* result_entity = NULL;
+    if (op_is_indirection(node->unary.op))
+    {
+        result_entity = resolver_follow_indirection(resolver, node, result);
+    }
+    else if (op_is_address(node->unary.op))
+    {
+        result_entity = resolver_follow_unary_address(resolver, node, result);
+    }
+
+    return result_entity;
+}
+
 struct resolver_entity* resolver_follow_part_return_entity(struct resolver_process* resolver, struct node* node, struct resolver_result* result)
 {
     struct resolver_entity* entity = NULL;
@@ -833,7 +873,24 @@ struct resolver_entity* resolver_follow_part_return_entity(struct resolver_proce
         case NODE_TYPE_CAST:
             entity = resolver_follow_cast(resolver, node, result);
             break;
+
+        case NODE_TYPE_UNARY:
+            entity = resolver_follow_unary(resolver, node, result);
+            break;
+
+        default:
+            // If we get here, we essentially mean we don't have enough information at compile time
+            entity = resolver_follow_unsupported_node(resolver, node, result);
+            break;
     }
+
+    if (entity)
+    {
+        entity->result = result;
+        entity->resolver = resolver;
+    }
+
+    return entity;
 }
 
 void resolver_follow_part(struct resolver_process* resolver, struct node* node, struct resolver_result* result)
@@ -841,9 +898,54 @@ void resolver_follow_part(struct resolver_process* resolver, struct node* node, 
     resolver_follow_part_return_entity(resolver, node, result);
 }
 
+// Apply rules to left and right based on rule
+void resolver_rule_apply_rules(struct resolver_entity* rule_entity, struct resolver_entity* left_entity, struct resolver_entity* right_entity)
+{
+    assert(rule_entity->type == RESOLVER_ENTITY_TYPE_RULE);
+    if (left_entity)
+    {
+        left_entity->flags |= rule_entity->rule.left.flags;
+    }
+
+    if(right_entity)
+    {
+        right_entity->flags |= rule_entity->rule.right.flags;
+    }
+}
+
+// Pushes resolved entities one by one
+void resolver_push_vector_of_entities(struct resolver_result* result, struct vector* vec)
+{
+    vector_set_peek_pointer_end(vec);
+    vector_set_flag(vec, VECTOR_FLAG_PEEK_DECREMENT);
+    struct resolver_entity* entity = vector_peek_ptr(vec);
+    while (entity)
+    {
+        resolver_result_entity_push(result, entity);
+        entity = vector_peek_ptr(vec);
+    }
+}
+
 void resolver_execute_rules(struct resolver_process* resolver, struct resolver_result* result)
 {
+    struct vector* saved_entities = vector_create(sizeof(struct resolver_entity*));
+    struct resolver_entity* entity = resolver_result_pop(result);
+    struct resolver_entity* last_processed_entity = NULL;
+    while (entity)
+    {
+        if (entity->type == RESOLVER_ENTITY_TYPE_RULE)
+        {
+            struct resolver_entity* left_entity = resolver_result_pop(result);
+            resolver_rule_apply_rules(entity, left_entity, last_processed_entity);
+            entity = left_entity;
+        }
 
+        vector_push(saved_entities, &entity);
+        last_processed_entity = entity;
+        entity = resolver_result_pop(result);
+    }
+
+    resolver_push_vector_of_entities(result, saved_entities);
 }
 
 void resolver_merge_compile_times(struct resolver_process* resolver, struct resolver_result* result)

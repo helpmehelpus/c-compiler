@@ -826,7 +826,7 @@ struct resolver_entity
     struct resolver_result* result;
 
     // Main resolver process, just like compile_process
-    struct resolver_process* process;
+    struct resolver_process* resolver;
 
     // Only accessible by the creator of the entity
     void* private;
@@ -950,6 +950,7 @@ bool node_is_expression(struct node* node, const char* op);
 bool node_is_struct_or_union(struct node* node);
 bool is_array_node(struct node* node);
 bool op_is_indirection(const char* op);
+bool op_is_address(const char* op);
 bool is_node_assignment(struct node* node);
 bool is_argument_node(struct node* node);
 bool node_valid(struct node* node);
