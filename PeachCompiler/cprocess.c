@@ -28,6 +28,7 @@ struct compile_process *compile_process_create(const char *filename, const char 
     process->flags = flags;
     process->cfile.fp = file;
     process->ofile = out_file;
+    process->resolver = resolver_default_new_process(process);
     process->generator = codegenerator_new(process);
 
     symresolver_initialize(process);
