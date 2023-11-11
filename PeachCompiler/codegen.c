@@ -3,7 +3,6 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <assert.h>
-
 static struct compile_process* current_process = NULL;
 static struct node* current_function = NULL;
 
@@ -12,7 +11,6 @@ struct history
     int flags;
 };
 
-// TODO: differentiate from parser functions
 static struct history *history_begin(int flags)
 {
     struct history *history = calloc(1, sizeof(struct history));
@@ -28,8 +26,6 @@ static struct history *history_down(struct history *history, int flags)
     return new_history;
 }
 
-int codegen_label_count();
-
 void codegen_new_scope(int flags)
 {
     resolver_default_new_scope(current_process->resolver, flags);
@@ -43,6 +39,11 @@ void codegen_finish_scope()
 struct node* codegen_node_next()
 {
     return vector_peek_ptr(current_process->node_tree_vec);
+}
+
+struct resolver_default_entity_data* codegen_entity_private(struct resolver_entity* entity)
+{
+    return resolver_default_entity_private(entity);
 }
 
 void asm_push_args(const char* ins, va_list args)
@@ -82,7 +83,7 @@ void asm_push_no_nl(const char* ins, ...)
     }
 }
 
-void asm_push_ins_push(const char* fmt, int stack_entity_type, const char* stack_entity_name, ...)
+void asm_push_ins_push(const char* fmt, int stack_entity_type, const char* stack_entity_name,...)
 {
     char tmp_buf[200];
     sprintf(tmp_buf, "push %s", fmt);
@@ -90,13 +91,9 @@ void asm_push_ins_push(const char* fmt, int stack_entity_type, const char* stack
     va_start(args, stack_entity_name);
     asm_push_args(tmp_buf, args);
     va_end(args);
-    assert(current_function);
-    stackframe_push(current_function, &(struct stack_frame_element){.type=stack_entity_type, .name=stack_entity_name});
-}
 
-void asm_push_ebp()
-{
-    asm_push_ins_push("ebp", STACK_FRAME_ELEMENT_TYPE_SAVED_BP, "function_entry_saved_ebp");
+    assert(current_function);
+    stackframe_push(current_function, &(struct stack_frame_element){.type=stack_entity_type,.name=stack_entity_name});
 }
 
 int asm_push_ins_pop(const char* fmt, int expecting_stack_entity_type, const char* expecting_stack_entity_name, ...)
@@ -107,28 +104,48 @@ int asm_push_ins_pop(const char* fmt, int expecting_stack_entity_type, const cha
     va_start(args, expecting_stack_entity_name);
     asm_push_args(tmp_buf, args);
     va_end(args);
+
     assert(current_function);
-    // In C, if we are using the stack, it should mean we are in a function
     struct stack_frame_element* element = stackframe_back(current_function);
     int flags = element->flags;
     stackframe_pop_expecting(current_function, expecting_stack_entity_type, expecting_stack_entity_name);
     return flags;
 }
 
+
+void asm_push_ins_push_with_data(const char* fmt, int stack_entity_type, const char* stack_entity_name, int flags, struct stack_frame_data* data, ...)
+{
+    char tmp_buf[200];
+    sprintf(tmp_buf, "push %s", fmt);
+    va_list args;
+    va_start(args, data);
+    asm_push_args(tmp_buf, args);
+    va_end(args);
+
+    flags |= STACK_FRAME_ELEMENT_FLAG_HAS_DATATYPE;
+    assert(current_function);
+    stackframe_push(current_function, &(struct stack_frame_element){.type=stack_entity_type,.name=stack_entity_name,.flags=flags,.data=*data});
+}
+void asm_push_ebp()
+{
+    asm_push_ins_push("ebp", STACK_FRAME_ELEMENT_TYPE_SAVED_BP, "function_entry_saved_ebp");
+}
+
+
 void asm_pop_ebp()
 {
     asm_push_ins_pop("ebp", STACK_FRAME_ELEMENT_TYPE_SAVED_BP, "function_entry_saved_ebp");
 }
 
+
 void codegen_stack_sub_with_name(size_t stack_size, const char* name)
 {
-    if (stack_size != 0)
+    if(stack_size != 0)
     {
-        stackframe_sub(current_function, STACK_FRAME_ELEMENT_TYPE_UNKOWN, name, stack_size);
+        stackframe_sub(current_function, STACK_FRAME_ELEMENT_TYPE_UNKNOWN, name, stack_size);
         asm_push("sub esp, %lld", stack_size);
     }
 }
-
 void codegen_stack_sub(size_t stack_size)
 {
     codegen_stack_sub_with_name(stack_size, "literal_stack_change");
@@ -138,7 +155,7 @@ void codegen_stack_add_with_name(size_t stack_size, const char* name)
 {
     if (stack_size != 0)
     {
-        stackframe_add(current_function, STACK_FRAME_ELEMENT_TYPE_UNKOWN, name, stack_size);
+        stackframe_add(current_function, STACK_FRAME_ELEMENT_TYPE_UNKNOWN, name, stack_size);
         asm_push("add esp, %lld", stack_size);
     }
 }
@@ -388,8 +405,6 @@ struct resolver_entity* codegen_register_function(struct node* func_node, int fl
 {
     return resolver_default_register_function(current_process->resolver, func_node, flags);
 }
-
-// in assembly, "extern" means a label is located somewhere else. to be resolved during linking
 void codegen_generate_function_prototype(struct node* node)
 {
     codegen_register_function(node, 0);
@@ -400,29 +415,208 @@ void codegen_generate_function_arguments(struct vector* argument_vector)
 {
     vector_set_peek_pointer(argument_vector, 0);
     struct node* current = vector_peek_ptr(argument_vector);
-    while (current)
+    while(current)
     {
         codegen_new_scope_entity(current, current->var.aoffset, RESOLVER_DEFAULT_ENTITY_FLAG_IS_LOCAL_STACK);
         current = vector_peek_ptr(argument_vector);
     }
 }
 
-void codegen_generate_body(struct node* body_node, struct history* history)
+void codegen_generate_number_node(struct node* node, struct history* history)
 {
-#warning "Implement codegen_generate_body!"
+    asm_push_ins_push_with_data("dword %i", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", STACK_FRAME_ELEMENT_FLAG_IS_NUMERICAL, &(struct stack_frame_data){.dtype=datatype_for_numeric()}, node->llnum);
 }
 
+bool codegen_is_exp_root_for_flags(int flags)
+{
+    return !(flags & EXPRESSION_IS_NOT_ROOT_NODE);
+}
+
+bool codegen_is_exp_root(struct history* history)
+{
+    return codegen_is_exp_root_for_flags(history->flags);
+}
+
+void codegen_generate_expressionable(struct node* node, struct history* history)
+{
+    bool is_root = codegen_is_exp_root(history);
+    if (is_root)
+    {
+        history->flags |= EXPRESSION_IS_NOT_ROOT_NODE;
+    }
+
+    switch(node->type)
+    {
+        case NODE_TYPE_NUMBER:
+            codegen_generate_number_node(node, history);
+            break;
+    }
+}
+
+const char* codegen_sub_register(const char* original_register, size_t size)
+{
+    const char* reg = NULL;
+    if (S_EQ(original_register, "eax"))
+    {
+        if (size == DATA_SIZE_BYTE)
+        {
+            reg = "al";
+        }
+        else if(size == DATA_SIZE_WORD)
+        {
+            reg = "ax";
+        }
+        else if(size == DATA_SIZE_DWORD)
+        {
+            reg = "eax";
+        }
+    }
+    else if (S_EQ(original_register, "ebx"))
+    {
+        if (size == DATA_SIZE_BYTE)
+        {
+            reg = "bl";
+        }
+        else if(size == DATA_SIZE_WORD)
+        {
+            reg = "bx";
+        }
+        else if(size == DATA_SIZE_DWORD)
+        {
+            reg = "ebx";
+        }
+
+    }
+    else if (S_EQ(original_register, "ecx"))
+    {
+        if (size == DATA_SIZE_BYTE)
+        {
+            reg = "cl";
+        }
+        else if(size == DATA_SIZE_WORD)
+        {
+            reg = "cx";
+        }
+        else if(size == DATA_SIZE_DWORD)
+        {
+            reg = "ecx";
+        }
+
+    }
+    else if (S_EQ(original_register, "edx"))
+    {
+        if (size == DATA_SIZE_BYTE)
+        {
+            reg = "dl";
+        }
+        else if(size == DATA_SIZE_WORD)
+        {
+            reg = "dx";
+        }
+        else if(size == DATA_SIZE_DWORD)
+        {
+            reg = "edx";
+        }
+
+    }
+
+    return reg;
+}
+const char* codegen_byte_word_or_dword_or_ddword(size_t size, const char** reg_to_use)
+{
+    const char* type = NULL;
+    const char* new_register = *reg_to_use;
+    if (size == DATA_SIZE_BYTE)
+    {
+        type = "byte";
+        new_register = codegen_sub_register(*reg_to_use, DATA_SIZE_BYTE);
+    }
+    else if (size == DATA_SIZE_WORD)
+    {
+        type = "word";
+        new_register = codegen_sub_register(*reg_to_use, DATA_SIZE_WORD);
+    }
+    else if(size == DATA_SIZE_DWORD)
+    {
+        type = "dword";
+        new_register = codegen_sub_register(*reg_to_use, DATA_SIZE_DWORD);
+    }
+    else if(size == DATA_SIZE_DDWORD)
+    {
+        type = "ddword";
+        new_register = codegen_sub_register(*reg_to_use, DATA_SIZE_DDWORD);
+    }
+    *reg_to_use = new_register;
+    return type;
+}
+
+void codegen_generate_assignment_instruction_for_operator(const char* mov_type_keyword, const char* address, const char* reg_to_use, const char* op, bool is_signed)
+{
+    if (S_EQ(op, "="))
+    {
+        asm_push("mov %s [%s], %s", mov_type_keyword, address, reg_to_use);
+    }
+    else if (S_EQ(op, "+="))
+    {
+        asm_push("add %s [%s], %s", mov_type_keyword, address, reg_to_use);
+    }
+}
+void codegen_generate_scope_variable(struct node* node)
+{
+    struct resolver_entity* entity = codegen_new_scope_entity(node,node->var.aoffset, RESOLVER_DEFAULT_ENTITY_FLAG_IS_LOCAL_STACK);
+    if (node->var.val)
+    {
+        codegen_generate_expressionable(node->var.val, history_begin(EXPRESSION_IS_ASSIGNMENT | IS_RIGHT_OPERAND_OF_ASSIGNMENT));
+        // pop eax
+        asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+        const char* reg_to_use = "eax";
+        const char* mov_type = codegen_byte_word_or_dword_or_ddword(datatype_element_size(&entity->dtype), &reg_to_use);
+        codegen_generate_assignment_instruction_for_operator(mov_type, codegen_entity_private(entity)->address, reg_to_use, "=", entity->dtype.flags & DATATYPE_FLAG_IS_SIGNED);
+    }
+}
+void codegen_generate_statement(struct node* node, struct history* history)
+{
+    switch(node->type)
+    {
+        case NODE_TYPE_VARIABLE:
+            codegen_generate_scope_variable(node);
+            break;
+    }
+}
+void codegen_generate_scope_no_new_scope(struct vector* statements, struct history* history)
+{
+    vector_set_peek_pointer(statements, 0);
+    struct node* statement_node = vector_peek_ptr(statements);
+    while(statement_node)
+    {
+        codegen_generate_statement(statement_node, history);
+        statement_node = vector_peek_ptr(statements);
+    }
+}
+void codegen_generate_stack_scope(struct vector* statements, size_t scope_size, struct history* history)
+{
+    codegen_new_scope(RESOLVER_SCOPE_FLAG_IS_STACK);
+    codegen_generate_scope_no_new_scope(statements, history);
+    codegen_finish_scope();
+}
+
+void codegen_generate_body(struct node* node, struct history* history)
+{
+    codegen_generate_stack_scope(node->body.statements, node->body.size, history);
+}
 void codegen_generate_function_with_body(struct node* node)
 {
     codegen_register_function(node, 0);
     asm_push("global %s", node->func.name);
     asm_push("; %s function", node->func.name);
     asm_push("%s:", node->func.name);
+
     asm_push_ebp();
     asm_push("mov ebp, esp");
     codegen_stack_sub(C_ALIGN(function_node_stack_size(node)));
     codegen_new_scope(RESOLVER_DEFAULT_ENTITY_FLAG_IS_LOCAL_STACK);
     codegen_generate_function_arguments(function_node_argument_vec(node));
+
     codegen_generate_body(node->func.body_n, history_begin(IS_ALONE_STATEMENT));
     codegen_finish_scope();
     codegen_stack_add(C_ALIGN(function_node_stack_size(node)));
@@ -430,7 +624,6 @@ void codegen_generate_function_with_body(struct node* node)
     stackframe_assert_empty(current_function);
     asm_push("ret");
 }
-
 void codegen_generate_function(struct node* node)
 {
     current_function = node;
@@ -443,15 +636,12 @@ void codegen_generate_function(struct node* node)
     codegen_generate_function_with_body(node);
 }
 
-/*
- * Global scope
- */
 void codegen_generate_root_node(struct node* node)
 {
-    switch (node->type)
+    switch(node->type)
     {
         case NODE_TYPE_VARIABLE:
-            // Already processed in data section
+            // We processed this earlier in data section.
             break;
 
         case NODE_TYPE_FUNCTION:

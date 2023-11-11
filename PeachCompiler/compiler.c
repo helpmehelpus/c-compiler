@@ -58,7 +58,8 @@ int compile_file(const char* filename, const char* out_filename, int flags)
     {
         return COMPILER_FAILED_WITH_ERRORS;
     }
-    // Perform code generation..
+
+    // Preform code generation..
 
     return COMPILER_FILE_COMPILED_OK;
 }
