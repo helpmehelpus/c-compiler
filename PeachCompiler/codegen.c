@@ -35,6 +35,7 @@ struct history
 
 void codegen_generate_expression_node(struct node* node, struct history* history);
 const char* codegen_sub_register(const char* original_register, size_t size);
+void codegen_generate_entity_access_for_function_call(struct resolver_result* result, struct resolver_entity* entity);
 
 struct response_data
 {
@@ -783,7 +784,7 @@ void codegen_generate_entity_access_for_entity_assignment_left_operand(struct re
                 break;
 
         case RESOLVER_ENTITY_TYPE_FUNCTION_CALL:
-#warning "implement function call"
+                codegen_generate_entity_access_for_function_call(result, entity);
                 break;
         case RESOLVER_ENTITY_TYPE_UNARY_INDIRECTION:
 #warning "implement unary indirection"
@@ -857,6 +858,45 @@ void codegen_generate_assignment_expression(struct node* node, struct history* h
     codegen_generate_assignment_part(node->exp.left, node->exp.op, history);
 }
 
+void codegen_generate_entity_access_for_function_call(struct resolver_result* result, struct resolver_entity* entity)
+{
+    // Reminder: In C, arguments are pushed back to front
+    vector_set_flag(entity->func_call_data.arguments, VECTOR_FLAG_PEEK_DECREMENT);
+    vector_set_peek_pointer_end(entity->func_call_data.arguments);
+
+    struct node* node = vector_peek_ptr(entity->func_call_data.arguments);
+    asm_push_ins_pop("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+    asm_push("mov ecx, ebx");
+    if (datatype_is_struct_or_union_non_pointer(&entity->dtype))
+    {
+#warning "IMPLEMENT STRUCTURES IN FUNCTION CALL"
+    }
+
+    while (node)
+    {
+        codegen_generate_expressionable(node, history_begin(EXPRESSION_IN_FUNCTION_CALL_ARGUMENTS));
+        node = vector_peek_ptr(entity->func_call_data.arguments);
+    }
+    // ebx may have been reused by codegen_generate_expressionable
+    asm_push("call ecx");
+    size_t stack_size = entity->func_call_data.stack_size;
+    if (datatype_is_struct_or_union_non_pointer(&entity->dtype))
+    {
+        // Our implementation for structs use an extra DWORD
+        stack_size += DATA_SIZE_DWORD;
+    }
+    codegen_stack_add(stack_size);
+    if (datatype_is_struct_or_union_non_pointer(&entity->dtype))
+    {
+#warning "Generate a structure push"
+    }
+    else
+    {
+        asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){.dtype=entity->dtype});
+    }
+#warning "More structure stuff"
+}
+
 void codegen_generate_entity_access_for_entity(struct resolver_result* result, struct resolver_entity* entity, struct history* history)
 {
     switch(entity->type)
@@ -870,7 +910,7 @@ void codegen_generate_entity_access_for_entity(struct resolver_result* result, s
             break;
 
         case RESOLVER_ENTITY_TYPE_FUNCTION_CALL:
-#warning "implement function call"
+            codegen_generate_entity_access_for_function_call(result,  entity);
             break;
         case RESOLVER_ENTITY_TYPE_UNARY_INDIRECTION:
 #warning "implement unary indirection"
@@ -903,6 +943,9 @@ void  codegen_generate_entity_access(struct resolver_result* result, struct reso
         codegen_generate_entity_access_for_entity(result, current, history);
         current = resolver_result_entity_next(current);
     }
+
+    struct resolver_entity* last_entity = result->last_entity;
+    codegen_response_acknowledge(&(struct response){.flags=RESPONSE_FLAG_RESOLVED_ENTITY,.data.resolved_entity=last_entity});
 }
 
 bool codegen_resolve_node_return_result(struct node* node, struct history* history, struct resolver_result** result_out)
@@ -1312,6 +1355,26 @@ void codegen_generate_expression_node(struct node* node, struct history* history
     codegen_generate_expression_node_for_arithmetic(node, history_down(history, codegen_remove_uninheritable_flags(history->flags) | additional_flags));
 }
 
+void codegen_discard_unused_stack()
+{
+    asm_stack_peek_start();
+
+    struct stack_frame_element* element = asm_stack_peek();
+    size_t stack_adjustment = 0;
+    while (element)
+    {
+        if (!S_EQ(element->name, "result_value"))
+        {
+            break;
+        }
+
+        stack_adjustment +=  DATA_SIZE_DWORD;
+        element = asm_stack_peek();
+    }
+
+    codegen_stack_add(stack_adjustment);
+}
+
 void codegen_generate_statement(struct node* node, struct history* history)
 {
     switch(node->type)
@@ -1323,7 +1386,10 @@ void codegen_generate_statement(struct node* node, struct history* history)
             codegen_generate_scope_variable(node);
             break;
     }
+
+    codegen_discard_unused_stack();
 }
+
 void codegen_generate_scope_no_new_scope(struct vector* statements, struct history* history)
 {
     vector_set_peek_pointer(statements, 0);
