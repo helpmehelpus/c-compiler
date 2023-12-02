@@ -3,19 +3,22 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <assert.h>
+
+#define STRUCTURE_PUSH_START_POSITION_ONE 1
+
 static struct compile_process* current_process = NULL;
 static struct node* current_function = NULL;
 
 enum
 {
     RESPONSE_FLAG_ACKNOWLEDGED          = 0b00000001,
-    RESPONSE_FLAG_PUSH_STRUCTURE        = 0b00000010,
+    RESPONSE_FLAG_PUSHED_STRUCTURE        = 0b00000010,
     RESPONSE_FLAG_RESOLVED_ENTITY       = 0b00000100,
     RESPONSE_FLAG_UNARY_GET_ADDRESS     = 0b00001000,
 };
 
-#define RESPONSE_SET(x) &(struct response{x})
-#define RESPONSE_EMPTY_RESPONSE_SET()
+#define RESPONSE_SET(x) (&(struct response){x})
+#define RESPONSE_EMPTY RESPONSE_SET()
 
 struct history_exp
 {
@@ -36,6 +39,7 @@ struct history
 void codegen_generate_expression_node(struct node* node, struct history* history);
 const char* codegen_sub_register(const char* original_register, size_t size);
 void codegen_generate_entity_access_for_function_call(struct resolver_result* result, struct resolver_entity* entity);
+void codegen_generate_structure_push(struct resolver_entity* entity, struct history* history, int start_pos);
 
 struct response_data
 {
@@ -448,6 +452,19 @@ void codegen_generate_global_variable_for_primitive(struct node* node)
         asm_push("%s: %s 0", node->var.name, asm_keyword_for_size(variable_size(node), tmp_buf));
     }
 }
+
+void codegen_generate_global_variable_for_struct(struct node* node)
+{
+    if (node->var.val != NULL)
+    {
+        compiler_error(current_process, "Value for structures are not yet supported\n");
+        return;
+    }
+
+    char tmp_buf[256];
+    asm_push("%s: %s 0", node->var.name, asm_keyword_for_size(variable_size(node), tmp_buf));
+}
+
 void codegen_generate_global_variable(struct node* node)
 {
     asm_push("; %s %s", node->var.type.type_str, node->var.name);
@@ -461,12 +478,26 @@ void codegen_generate_global_variable(struct node* node)
             codegen_generate_global_variable_for_primitive(node);
             break;
 
+        case DATA_TYPE_STRUCT:
+            codegen_generate_global_variable_for_struct(node);
+            break;
+
         case DATA_TYPE_DOUBLE:
         case DATA_TYPE_FLOAT:
             compiler_error(current_process, "Doubles and floats are not supported in our subset of C\n");
             break;
     }
 }
+
+void codegen_generate_struct(struct node* node)
+{
+    if (node->flags & NODE_FLAG_HAS_VARIABLE_COMBINED)
+    {
+        codegen_generate_global_variable(node->_struct.var);
+    }
+
+}
+
 void codegen_generate_data_section_part(struct node* node)
 {
     switch (node->type)
@@ -475,10 +506,15 @@ void codegen_generate_data_section_part(struct node* node)
             codegen_generate_global_variable(node);
             break;
 
+        case NODE_TYPE_STRUCT:
+            codegen_generate_struct(node);
+            break;
+
         default:
             break;
     }
 }
+
 void codegen_generate_data_section()
 {
     asm_push("section .data");
@@ -869,7 +905,9 @@ void codegen_generate_entity_access_for_function_call(struct resolver_result* re
     asm_push("mov ecx, ebx");
     if (datatype_is_struct_or_union_non_pointer(&entity->dtype))
     {
-#warning "IMPLEMENT STRUCTURES IN FUNCTION CALL"
+        asm_push("; SUBTRACT ROOM FOR RETURNED STRUCTURE/UNION DATATYPE");
+        codegen_stack_sub_with_name(align_value(datatype_size(&entity->dtype), DATA_SIZE_DWORD), "result_value");
+        asm_push_ins_push("esp", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
     }
 
     while (node)
@@ -888,13 +926,21 @@ void codegen_generate_entity_access_for_function_call(struct resolver_result* re
     codegen_stack_add(stack_size);
     if (datatype_is_struct_or_union_non_pointer(&entity->dtype))
     {
-#warning "Generate a structure push"
+        asm_push("mov ebx, eax");
+        codegen_generate_structure_push(entity, history_begin(0), 0);
     }
     else
     {
         asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){.dtype=entity->dtype});
     }
-#warning "More structure stuff"
+
+    struct resolver_entity* next_entity = resolver_result_entity_next(entity);
+    if (next_entity && datatype_is_struct_or_union(&entity->dtype))
+    {
+        asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+        asm_push("mov ebx, eax");
+        asm_push_ins_push("ebx", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+    }
 }
 
 void codegen_generate_entity_access_for_entity(struct resolver_result* result, struct resolver_entity* entity, struct history* history)
@@ -1373,6 +1419,38 @@ void codegen_discard_unused_stack()
     }
 
     codegen_stack_add(stack_adjustment);
+}
+
+void codegen_plus_or_minus_string_for_value(char* out, int val, size_t len)
+{
+    memset(out, 0, len);
+    if (val < 0)
+    {
+        sprintf(out, "%i", val);
+    }
+    else
+    {
+        sprintf(out, "+%i", val);
+    }
+}
+
+void codegen_generate_structure_push(struct resolver_entity* entity, struct history* history, int start_pos)
+{
+    asm_push("; STRUCTURE PUSH");
+    size_t structure_size = align_value(entity->dtype.size, DATA_SIZE_DWORD);
+
+    // How many pushes do we need for this entire struct?
+    int pushes = structure_size / DATA_SIZE_DWORD;
+
+    for (int i = pushes - 1; i >= start_pos; i++)
+    {
+        char fmt[10];
+        int chunk_offset = (i * DATA_SIZE_DWORD);
+        codegen_plus_or_minus_string_for_value(fmt, chunk_offset, sizeof(fmt));
+        asm_push_ins_push_with_data("dword [%s%s]", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0,&(struct stack_frame_data){.dtype=entity->dtype}, "ebx", fmt);
+    }
+    asm_push("; END STRUCTURE PUSH");
+    codegen_response_acknowledge(RESPONSE_SET(.flags=RESPONSE_FLAG_PUSHED_STRUCTURE));
 }
 
 void codegen_generate_statement(struct node* node, struct history* history)

@@ -89,12 +89,12 @@ struct node* symresolver_node(struct symbol* sym)
 
 void symresolver_build_for_variable_node(struct compile_process* process, struct node* node)
 {
-    compiler_error(process, "Variables not yet supported\n");
+    symresolver_register_symbol(process, node->var.name, SYMBOL_TYPE_NODE, node);
 }
 
 void symresolver_build_for_function_node(struct compile_process* process, struct node* node)
 {
-    compiler_error(process, "Functions are not yet supported\n");
+    symresolver_register_symbol(process, node->func.name, SYMBOL_TYPE_NODE, node);
 }
 
 void symresolver_build_for_structure_node(struct compile_process* process, struct node* node)
@@ -139,7 +139,7 @@ void symresolver_build_for_node(struct compile_process* process, struct node* no
             symresolver_build_for_union_node(process, node);
             break;
 
-            // Ignore all other node types, because they cant become symbols.
+            // Ignore all other node types, because they can't become symbols.
 
     }
 }
