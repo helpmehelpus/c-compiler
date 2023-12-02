@@ -8,7 +8,7 @@
 *.ko
 *.obj
 *.elf
-build/*.o
+/build/*.o
 
 # Linker output
 *.ilk
