@@ -41,6 +41,8 @@ const char* codegen_sub_register(const char* original_register, size_t size);
 void codegen_generate_entity_access_for_function_call(struct resolver_result* result, struct resolver_entity* entity);
 void codegen_generate_structure_push(struct resolver_entity* entity, struct history* history, int start_pos);
 void codegen_plus_or_minus_string_for_value(char* out, int val, size_t len);
+bool codegen_resolve_node_for_value(struct node* node, struct history* history);
+void codegen_generate_expressionable(struct node* node, struct history* history);
 
 struct response_data
 {
@@ -601,7 +603,11 @@ void codegen_generate_structure_push_or_return(struct resolver_entity* entity, s
 
 void codegen_gen_mem_access(struct node* node, int flags, struct resolver_entity* entity)
 {
-#warning "Generate & address"
+    if (flags & EXPRESSION_GET_ADDRESS)
+    {
+        codegen_gen_mem_access_get_address(node, flags, entity);
+        return;
+    }
 
     if (datatype_is_struct_or_union_non_pointer(&entity->dtype))
     {
@@ -644,6 +650,34 @@ void codegen_generate_identifier(struct node* node, struct history* history)
 
 }
 
+void codegen_generate_unary_address(struct node* node, struct history* history)
+{
+    int flags = history->flags;
+    codegen_generate_expressionable(node->unary.operand, history_down(history, flags | EXPRESSION_GET_ADDRESS));
+    codegen_response_acknowledge(&(struct response){.flags=RESPONSE_FLAG_UNARY_GET_ADDRESS});
+}
+
+void codegen_generate_unary(struct node* node, struct history* history)
+{
+    int flags = history->flags;
+    if (codegen_resolve_node_for_value(node, history))
+    {
+        return;
+    }
+
+    if (op_is_indirection(node->unary.op))
+    {
+        #warning "Implement poiner unary"
+        return;
+    }
+    else if (op_is_address(node->unary.op))
+    {
+        codegen_generate_unary_address(node, history);
+        return;
+    }
+        #warning "Generate normal unary"
+}
+
 void codegen_generate_expressionable(struct node* node, struct history* history)
 {
     bool is_root = codegen_is_exp_root(history);
@@ -664,6 +698,10 @@ void codegen_generate_expressionable(struct node* node, struct history* history)
 
         case NODE_TYPE_EXPRESSION:
             codegen_generate_expression_node(node, history);
+            break;
+
+        case NODE_TYPE_UNARY:
+            codegen_generate_unary(node, history);
             break;
     }
 }
