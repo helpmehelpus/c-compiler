@@ -1831,6 +1831,11 @@ void codegen_generate_for_statement(struct node* node)
     codegen_end_entry_exit_point();
 }
 
+void codegen_generate_break_statement(struct node* node)
+{
+    codegen_goto_exit_point(node);
+}
+
 void codegen_generate_statement(struct node *node, struct history *history)
 {
     switch (node->type)
@@ -1866,6 +1871,9 @@ void codegen_generate_statement(struct node *node, struct history *history)
             codegen_generate_for_statement(node);
             break;
 
+        case NODE_TYPE_STATEMENT_BREAK:
+            codegen_generate_break_statement(node);
+            break;
     }
 
     codegen_discard_unused_stack();
