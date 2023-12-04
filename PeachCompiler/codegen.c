@@ -1793,6 +1793,7 @@ void codegen_generate_do_while_stmt(struct node* node)
     codegen_end_entry_exit_point();
 }
 
+#warning "bug in for loop: continue not incrementing the loop"
 void codegen_generate_for_statement(struct node* node)
 {
     struct for_stmt* for_stmt = &node->stmt.for_stmt;
@@ -1836,6 +1837,11 @@ void codegen_generate_break_statement(struct node* node)
     codegen_goto_exit_point(node);
 }
 
+void codegen_generate_continue_statement(struct node* node)
+{
+    codegen_goto_entry_point(node);
+}
+
 void codegen_generate_statement(struct node *node, struct history *history)
 {
     switch (node->type)
@@ -1873,6 +1879,10 @@ void codegen_generate_statement(struct node *node, struct history *history)
 
         case NODE_TYPE_STATEMENT_BREAK:
             codegen_generate_break_statement(node);
+            break;
+
+        case NODE_TYPE_STATEMENT_CONTINUE:
+            codegen_generate_continue_statement(node);
             break;
     }
 
