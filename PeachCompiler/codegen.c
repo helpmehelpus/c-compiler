@@ -131,6 +131,7 @@ void codegen_generate_expressionable(struct node *node, struct history *history)
 int codegen_label_count();
 void codegen_generate_body(struct node *node, struct history *history);
 int codegen_remove_uninheritable_flags(int flags);
+void codegen_generate_assignment_part(struct node *node, const char *op, struct history *history);
 
 void codegen_new_scope(int flags)
 {
@@ -858,9 +859,46 @@ void codegen_generate_normal_unary(struct node* node, struct history* history)
     {
         codegen_generate_unary_indirection(node, history);
     }
-
-
+    else if (S_EQ(node->unary.op, "++"))
+    {
+        if (node->unary.flags & UNARY_FLAGS_IS_LEFT_OPERANDED_UNARY)
+        {
+            // x++
+            asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){.dtype=last_dtype});
+            asm_push("inc eax");
+            asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){.dtype=last_dtype});
+            codegen_generate_assignment_part(node->unary.operand, "=", history);
+        }
+        else
+        {
+            // ++x
+            asm_push("inc eax");
+            asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){.dtype=last_dtype});
+            codegen_generate_assignment_part(node->unary.operand, "=", history);
+            asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){.dtype=last_dtype});
+        }
+    }
+    else if (S_EQ(node->unary.op, "--"))
+    {
+        if (node->unary.flags & UNARY_FLAGS_IS_LEFT_OPERANDED_UNARY)
+        {
+            // x--
+            asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){.dtype=last_dtype});
+            asm_push("dec eax");
+            asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){.dtype=last_dtype});
+            codegen_generate_assignment_part(node->unary.operand, "=", history);
+        }
+        else
+        {
+            // --x
+            asm_push("dec eax");
+            asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){.dtype=last_dtype});
+            codegen_generate_assignment_part(node->unary.operand, "=", history);
+            asm_push_ins_push_with_data("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value", 0, &(struct stack_frame_data){.dtype=last_dtype});
+        }
+    }
 }
+
 void codegen_generate_unary(struct node* node, struct history* history)
 {
     int flags = history->flags;
@@ -1347,6 +1385,7 @@ void codegen_generate_move_struct(struct datatype* dtype, const char* base_addre
         asm_push("mov [%s%s], eax", base_address, fmt);
     }
 }
+
 void codegen_generate_assignment_part(struct node *node, const char *op, struct history *history)
 {
     struct datatype right_operand_dtype;
