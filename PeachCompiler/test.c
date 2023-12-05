@@ -1,7 +1,6 @@
+int abc[50];
 int main() {
     int x;
-    x = 50;
-    char c;
-    c = (char) x;
-    return x;
+    abc[1] = 50;
+    return abc[1];
 }
