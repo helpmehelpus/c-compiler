@@ -832,6 +832,30 @@ void codegen_generate_expression_parenthesis_node(struct node* node, struct hist
     codegen_generate_expressionable(node->parenthesis.exp, history_down(history, codegen_remove_uninheritable_flags(history->flags)));
 }
 
+void codegen_generate_ternary(struct node* node, struct history* history)
+{
+    int true_label_id = codegen_label_count();
+    int false_label_id = codegen_label_count();
+    int ternary_end_label_id = codegen_label_count();
+
+    struct datatype last_dtye;
+    assert(asm_datatype_back(&last_dtye));
+
+    asm_push_ins_pop("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+    asm_push("cmp eax, 0");
+    asm_push("je .ternary_false_%i", false_label_id);
+    asm_push(".ternary_true_%i:", true_label_id);
+
+    codegen_generate_expressionable(node->tenary.true_node, history_down(history, 0));
+    asm_push_ins_pop_or_ignore("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+    asm_push("jmp .ternary_end_%i", ternary_end_label_id);
+
+    asm_push(".ternary_false_%i:", false_label_id);
+    codegen_generate_expressionable(node->tenary.false_node, history_down(history, 0));
+    asm_push_ins_pop_or_ignore("eax", STACK_FRAME_ELEMENT_TYPE_PUSHED_VALUE, "result_value");
+    asm_push(".ternary_end_%i:", ternary_end_label_id);
+}
+
 void codegen_generate_expressionable(struct node *node, struct history *history)
 {
     bool is_root = codegen_is_exp_root(history);
@@ -864,6 +888,10 @@ void codegen_generate_expressionable(struct node *node, struct history *history)
 
         case NODE_TYPE_EXPRESSION_PARENTHESES:
             codegen_generate_expression_parenthesis_node(node, history);
+            break;
+
+        case NODE_TYPE_TENARY:
+            codegen_generate_ternary(node, history);
             break;
     }
 }
