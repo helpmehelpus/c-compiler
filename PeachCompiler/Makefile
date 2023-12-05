@@ -1,4 +1,4 @@
-OBJECTS= ./build/compiler.o ./build/cprocess.o ./build/lexer.o ./build/token.o ./build/lex_process.o ./build/parser.o ./build/node.o ./build/scope.o ./build/symresolver.o ./build/fixup.o ./build/array.o ./build/expressionable.o ./build/helper.o ./build/datatype.o ./build/helpers/buffer.o ./build/helpers/vector.o
+OBJECTS= ./build/compiler.o ./build/cprocess.o ./build/rdefault.o ./build/lexer.o ./build/token.o ./build/lex_process.o ./build/parser.o ./build/node.o ./build/scope.o ./build/symresolver.o ./build/codegen.o ./build/stackframe.o ./build/resolver.o ./build/fixup.o ./build/array.o ./build/expressionable.o ./build/helper.o ./build/datatype.o ./build/helpers/buffer.o ./build/helpers/vector.o
 INCLUDES= -I./
 
 all: ${OBJECTS}
@@ -9,6 +9,9 @@ all: ${OBJECTS}
 
 ./build/cprocess.o: ./cprocess.c
 	gcc cprocess.c ${INCLUDES} -o ./build/cprocess.o -g -c
+
+./build/rdefault.o: ./rdefault.c
+	gcc rdefault.c ${INCLUDES} -o ./build/rdefault.o -g -c
 
 ./build/lexer.o: ./lexer.c
 	gcc lexer.c ${INCLUDES} -o ./build/lexer.o -g -c
@@ -30,6 +33,15 @@ all: ${OBJECTS}
 
 ./build/symresolver.o: ./symresolver.c
 	gcc symresolver.c ${INCLUDES} -o ./build/symresolver.o -g -c
+
+./build/codegen.o: ./codegen.c
+	gcc codegen.c ${INCLUDES} -o ./build/codegen.o -g -c
+
+./build/stackframe.o: ./stackframe.c
+	gcc stackframe.c ${INCLUDES} -o ./build/stackframe.o -g -c
+
+./build/resolver.o: ./resolver.c
+	gcc resolver.c ${INCLUDES} -o ./build/resolver.o -g -c
 
 ./build/fixup.o: ./fixup.c
 	gcc fixup.c ${INCLUDES} -o ./build/fixup.o -g -c

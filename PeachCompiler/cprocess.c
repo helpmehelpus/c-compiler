@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include "compiler.h"
 #include "helpers/vector.h"
+
 struct compile_process *compile_process_create(const char *filename, const char *filename_out, int flags)
 {
     FILE *file = fopen(filename, "r");
@@ -27,6 +28,8 @@ struct compile_process *compile_process_create(const char *filename, const char 
     process->flags = flags;
     process->cfile.fp = file;
     process->ofile = out_file;
+    process->resolver = resolver_default_new_process(process);
+    process->generator = codegenerator_new(process);
 
     symresolver_initialize(process);
     symresolver_new_table(process);
