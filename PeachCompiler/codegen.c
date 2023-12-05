@@ -579,9 +579,27 @@ void codegen_generate_global_variable_for_union(struct node* node)
     asm_push("%s: %s 0", node->var.name, asm_keyword_for_size(variable_size(node), tmp_buf));
 }
 
+void codegen_generate_variable_for_array(struct node* node)
+{
+    if (node->var.val != NULL)
+    {
+        compiler_error(current_process, "No support values for arrays");
+        return;
+    }
+
+    char tmp_bf[256];
+    asm_push("%s: %s 0", node->var.name, asm_keyword_for_size(variable_size(node), tmp_bf));
+}
+
 void codegen_generate_global_variable(struct node *node)
 {
     asm_push("; %s %s", node->var.type.type_str, node->var.name);
+    if (node->var.type.flags & DATATYPE_FLAG_IS_ARRAY)
+    {
+        codegen_generate_variable_for_array(node);
+        codegen_new_scope_entity(node, 0, 0);
+        return;
+    }
     switch (node->var.type.type)
     {
         case DATA_TYPE_VOID:
@@ -605,6 +623,9 @@ void codegen_generate_global_variable(struct node *node)
             compiler_error(current_process, "Doubles and floats are not supported in our subset of C\n");
             break;
     }
+
+    assert(node->type == NODE_TYPE_VARIABLE);
+    codegen_new_scope_entity(node, 0, 0);
 }
 
 void codegen_generate_struct(struct node* node)
@@ -624,12 +645,28 @@ void codegen_generate_union(struct node* node)
     }
 }
 
+void codegen_generate_global_variable_list(struct node* var_list_node)
+{
+    assert(var_list_node->type == NODE_TYPE_VARIABLE_LIST);
+    vector_set_peek_pointer(var_list_node->var_list.list, 0);
+    struct node* var_node = vector_peek_ptr(var_list_node->var_list.list);
+    while (var_node)
+    {
+        codegen_generate_global_variable(var_node);
+        var_node = vector_peek_ptr(var_list_node->var_list.list);
+    }
+}
+
 void codegen_generate_data_section_part(struct node *node)
 {
     switch (node->type)
     {
         case NODE_TYPE_VARIABLE:
             codegen_generate_global_variable(node);
+            break;
+
+        case NODE_TYPE_VARIABLE_LIST:
+            codegen_generate_global_variable_list(node);
             break;
 
         case NODE_TYPE_STRUCT:
@@ -2103,6 +2140,18 @@ void codegen_generate_label(struct node* node)
     asm_push("label_%s:", node->label.name->sval);
 }
 
+void codegen_generate_scope_variable_for_list(struct node* var_list_node)
+{
+    assert(var_list_node->type == NODE_TYPE_VARIABLE_LIST);
+    vector_set_peek_pointer(var_list_node->var_list.list, 0);
+    struct node* var_node = vector_peek_ptr(var_list_node->var_list.list);
+    while (var_node)
+    {
+        codegen_generate_scope_variable(var_node);
+        var_node = vector_peek_ptr(var_list_node->var_list.list);
+    }
+}
+
 void codegen_generate_statement(struct node *node, struct history *history)
 {
     switch (node->type)
@@ -2119,9 +2168,14 @@ void codegen_generate_statement(struct node *node, struct history *history)
             codegen_generate_scope_variable(node);
             break;
 
+        case NODE_TYPE_VARIABLE_LIST:
+            codegen_generate_scope_variable_for_list(node);
+            break;
+
         case NODE_TYPE_STATEMENT_IF:
             codegen_generate_if_stmt(node);
             break;
+
         case NODE_TYPE_STATEMENT_RETURN:
             codegen_generate_statement_return(node);
             break;
