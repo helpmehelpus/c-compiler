@@ -230,6 +230,8 @@ struct code_generator
     // vector of struct codegen_exit_point*
     struct vector* exit_points;
 
+    struct vector* custom_data_section;
+
     // vector of struct response*
     struct vector* responses;
 };
@@ -431,7 +433,7 @@ void stackframe_assert_empty(struct node* func_node);
 enum
 {
     // If set, unary operand is on the left e.g. x++ and vice-versa
-    UNARY_FLAGS_IS_LEFT_OPERANDED_UNARY    = 0b00000001,
+    UNARY_FLAG_IS_LEFT_OPERANDED_UNARY    = 0b00000001,
 };
 
 struct node;

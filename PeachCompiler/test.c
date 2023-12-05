@@ -1,17 +1,10 @@
 int printf(const char* s, ...);
-
-struct dog{
-    int a;
-    int b;
-};
-
-void set_dog(struct dog* d, int x)
+int special(char c1, int i1)
 {
-    d->b = x;
+    return c1+i1;
 }
 
-int main() {
-    struct dog d;
-    set_dog(&d, 70);
-    printf("hello world %i\n", d.b);
+int main()
+{
+    printf("%i\n", special(22, 10));
 }

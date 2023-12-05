@@ -71,7 +71,7 @@ struct history
     int flags;
     struct parser_history_switch
     {
-        struct history_cases case_data;
+        struct history_cases* case_data;
     } _switch;
 };
 
@@ -97,7 +97,8 @@ static struct history *history_down(struct history *history, int flags)
 struct parser_history_switch parser_new_switch_statement(struct history *history)
 {
     memset(&history->_switch, 0, sizeof(&history->_switch));
-    history->_switch.case_data.cases = vector_create(sizeof(struct parsed_switch_case));
+    history->_switch.case_data = calloc(1, sizeof(struct history_cases));
+    history->_switch.case_data->cases = vector_create(sizeof(struct parsed_switch_case));
     history->flags |= HISTORY_FLAG_IN_SWITCH_STATEMENT;
     return history->_switch;
 }
@@ -112,7 +113,7 @@ void parser_register_case(struct history *history, struct node *case_node)
     assert(history->flags & HISTORY_FLAG_IN_SWITCH_STATEMENT);
     struct parsed_switch_case scase;
     scase.index = case_node->stmt._case.exp->llnum;
-    vector_push(history->_switch.case_data.cases, &scase);
+    vector_push(history->_switch.case_data->cases, &scase);
 }
 
 int parse_expressionable_single(struct history *history);
@@ -350,9 +351,7 @@ void parser_reorder_expression(struct node **node_out)
         }
     }
 
-    if ((is_array_node(node->exp.left) && is_node_assignment(node->exp.right))
-        || ((node_is_expression(node->exp.left, "()") || node_is_expression(node->exp.left, "[]"))
-        && node_is_expression(node->exp.right, ",")))
+    if ((is_array_node(node->exp.left) && is_node_assignment(node->exp.right)) || ((node_is_expression(node->exp.left, "()") || node_is_expression(node->exp.left, "[]")) && node_is_expression(node->exp.right, ",")))
     {
         parser_node_move_right_left_to_left(node);
     }
@@ -398,9 +397,8 @@ void parse_for_unary()
 
 void parse_for_left_operanded_unary(struct node* left_operand_node, const char* unary_op)
 {
-    make_unary_node(unary_op, left_operand_node, UNARY_FLAGS_IS_LEFT_OPERANDED_UNARY);
+    make_unary_node(unary_op, left_operand_node, UNARY_FLAG_IS_LEFT_OPERANDED_UNARY);
 }
-
 void parse_exp_normal(struct history *history)
 {
     struct token *op_token = token_peek_next();
@@ -423,7 +421,6 @@ void parse_exp_normal(struct history *history)
     // Pop off the left node
     node_pop();
 
-    // parse x++, x--
     if (is_left_operanded_unary_operator(op))
     {
         parse_for_left_operanded_unary(node_left, op);
@@ -552,13 +549,14 @@ void parse_for_cast()
     struct node *operand_node = node_pop();
     make_cast_node(&dtype, operand_node);
 }
-
 int parse_exp(struct history *history)
 {
+
     if (history->flags & EXPRESSION_IS_UNARY && !unary_operand_compatible(token_peek_next()))
     {
         return -1;
     }
+
     if (S_EQ(token_peek_next()->sval, "("))
     {
         parse_for_parentheses(history);
@@ -984,7 +982,6 @@ void parser_scope_offset_for_stack(struct node *node, struct history *history)
     {
         variable_node(node)->var.padding = padding(upward_stack ? offset : -offset, DATA_SIZE_DWORD);
     }
-
     variable_node(node)->var.aoffset = offset + (upward_stack ? variable_node(node)->var.padding : -variable_node(node)->var.padding);
 }
 
@@ -1474,7 +1471,6 @@ void parse_struct(struct datatype *dtype)
         parser_scope_finish();
     }
 }
-
 void parse_struct_or_union(struct datatype *dtype)
 {
     switch (dtype->type)
@@ -1668,14 +1664,13 @@ void parse_keyword_parentheses_expression(const char *keyword)
     expect_sym(')');
 }
 
-void parse_default(struct history* history)
+void parse_default(struct history *history)
 {
     expect_keyword("default");
-    expect_sym(';');
+    expect_sym(':');
     make_default_node();
-    history->_switch.case_data.has_default_case = true;
+    history->_switch.case_data->has_default_case = true;
 }
-
 void parse_case(struct history *history)
 {
     expect_keyword("case");
@@ -1701,7 +1696,7 @@ void parse_switch(struct history *history)
     parse_body(&variable_size, history);
     struct node *body_node = node_pop();
     // Make the switch node
-    make_switch_node(switch_exp_node, body_node, _switch.case_data.cases, _switch.case_data.has_default_case);
+    make_switch_node(switch_exp_node, body_node, _switch.case_data->cases, _switch.case_data->has_default_case);
     parser_end_switch_statement(&_switch);
 }
 
@@ -1966,7 +1961,6 @@ int parse_expressionable_single(struct history *history)
     }
     return res;
 }
-
 void parse_expressionable(struct history *history)
 {
     while (parse_expressionable_single(history) == 0)
@@ -1978,7 +1972,6 @@ void parse_keyword_for_global()
 {
     parse_keyword(history_begin(HISTORY_FLAG_IS_GLOBAL_SCOPE));
     struct node *node = node_pop();
-
     switch (node->type)
     {
         case NODE_TYPE_VARIABLE:
@@ -1988,7 +1981,6 @@ void parse_keyword_for_global()
             symresolver_build_for_node(current_process, node);
             break;
     }
-
     node_push(node);
 }
 
